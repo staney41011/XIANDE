@@ -1,0 +1,20 @@
+{
+  "name": "賢德志士",
+  "short_name": "賢德志士",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#fdfbf7",
+  "theme_color": "#8bc34a",
+  "icons": [
+    {
+      "src": "./賢德LOGO.jpg",
+      "sizes": "192x192",
+      "type": "image/jpeg"
+    },
+    {
+      "src": "./賢德LOGO.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg"
+    }
+  ]
+}
