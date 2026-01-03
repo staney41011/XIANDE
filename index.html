@@ -9,20 +9,30 @@
   
   <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
   <script>
-    // 清除舊的 Worker (保險起見)
+    // 強制版本號，用來清除舊緩存
+    const APP_VERSION = "20250104-2"; 
+
+    // 1. 強制移除所有舊的 Service Worker (避免卡快取)
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.getRegistrations().then(r => {
-        r.forEach(reg => { if(reg.scope.includes("staney41011.github.io/$")) reg.unregister(); });
+      navigator.serviceWorker.getRegistrations().then(function(registrations) {
+        for(let registration of registrations) {
+          // 如果發現註冊在根目錄 (錯誤的位置)，就移除它
+          if (registration.scope.includes("staney41011.github.io/$")) {
+            console.log('清除舊版 Service Worker:', registration);
+            registration.unregister();
+          }
+        }
       });
     }
 
+    // 2. 初始化 OneSignal
     window.OneSignalDeferred = window.OneSignalDeferred || [];
     OneSignalDeferred.push(function(OneSignal) {
       OneSignal.init({
         appId: "2c0c1bb1-f413-474e-bc2d-45586547b981", 
         notifyButton: { enable: true },
         allowLocalhostAsSecureOrigin: true,
-        // 如果您的網站已移至 staney41011.github.io 根目錄，這裡可以拿掉 path 設定
+        // 若已移至根目錄專案，這裡不需要 path
         // 若還在 XIANDE 資料夾，請保留
         path: "/XIANDE/", 
         serviceWorkerPath: "OneSignalSDKWorker.js",
@@ -35,7 +45,7 @@
   </script>
 
   <style>
-    /* 增加 safe-area 支援 */
+    /* CSS 樣式 */
     :root { --bg-color: #fdfbf7; --card-bg: #ffffff; --primary: #8bc34a; --accent: #ffb74d; --blue: #81d4fa; --red: #ff8a80; --text: #5d5d5d; --shadow: 0 4px 12px rgba(0,0,0,0.08); }
     * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
     body { font-family: 'Varela Round', sans-serif; background: var(--bg-color); color: var(--text); margin: 0; height: 100vh; display: flex; flex-direction: column; overflow: hidden;}
@@ -45,7 +55,7 @@
     .btn-primary { background: var(--blue); } .btn-success { background: var(--primary); } .btn-warn { background: var(--accent); }
     .input-field { width: 100%; padding: 10px; margin: 5px 0; border: 2px solid #eee; border-radius: 10px; background: #fafafa; outline: none; font-family: inherit;}
     
-    .view-section { display: none; width: 100%; animation: fadeIn 0.3s; padding-bottom: 80px; } /* 增加底部空間 */
+    .view-section { display: none; width: 100%; animation: fadeIn 0.3s; padding-bottom: 80px; } 
     .view-section.active { display: block; }
     @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
     
@@ -62,24 +72,29 @@
     /* 底部導航列優化 */
     .bottom-nav { 
       background: #fff; padding: 8px 0; display: flex; justify-content: space-around; border-top: 1px solid #eee; 
-      padding-bottom: env(safe-area-inset-bottom); /* 避開 Android 橫條 */
+      padding-bottom: env(safe-area-inset-bottom); 
       height: calc(55px + env(safe-area-inset-bottom));
     }
     .nav-btn { background: none; border: none; color: #ccc; font-size: 10px; flex: 1; text-align: center; }
     .nav-btn.active { color: var(--primary); transform: scale(1.1); transition: 0.2s;}
     .nav-icon { font-size: 20px; display: block; margin-bottom: 2px; }
 
-    /* 其他樣式 */
+    /* 果樹樣式 (修復果實顯示) */
     .orchard-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 20px; width: 100%; padding-bottom: 20px;}
     .tree-container { text-align: center; margin-bottom: 10px; cursor: pointer; transition: transform 0.1s; position: relative;}
-    .tree-canopy { background: #66bb6a; border-radius: 50% 50% 40% 40%; margin: 0 auto; padding: 5px; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; box-shadow: inset -5px -5px 10px rgba(0,0,0,0.1); position: relative; }
+    .tree-container:active { transform: scale(0.95); }
+    .tree-canopy { background: #66bb6a; border-radius: 50% 50% 40% 40%; margin: 0 auto; padding: 5px; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; box-shadow: inset -5px -5px 10px rgba(0,0,0,0.1); position: relative; transition: width 0.3s, height 0.3s; }
     .tree-trunk { background: #8d6e63; margin: -2px auto 0 auto; border-radius: 0 0 5px 5px;}
     .tree-scale-s .tree-canopy { width: 100px; min-height: 80px; } .tree-scale-s .tree-trunk { width: 15px; height: 20px; }
     .tree-scale-m .tree-canopy { width: 130px; min-height: 100px; } .tree-scale-m .tree-trunk { width: 20px; height: 30px; }
     .tree-scale-l .tree-canopy { width: 160px; min-height: 120px; } .tree-scale-l .tree-trunk { width: 25px; height: 40px; }
-    .tree-label { background: #fff; border: 1px solid #eee; padding: 4px 8px; border-radius: 8px; font-size: 12px; margin-top: 5px; display: inline-block; font-weight: bold; color: #333; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+    .tree-label { background: #fff; border: 1px solid #eee; padding: 4px 8px; border-radius: 8px; font-size: 12px; margin-top: 5px; display: inline-block; font-weight: bold; color: #333; box-shadow: 0 2px 5px rgba(0,0,0,0.05); line-height: 1.4; min-width: 90px; }
+    
+    /* 果實樣式 */
     .fruit { width: 12px; height: 12px; border-radius: 50%; margin: 2px; box-shadow: 1px 1px 2px rgba(0,0,0,0.2); flex-shrink: 0;}
-    .fruit.red { background: var(--red); } .fruit.gold { background: #ffd700; } .fruit.blue { background: #29b6f6; } 
+    .fruit.red { background: var(--red); } 
+    .fruit.gold { background: #ffd700; } 
+    .fruit.blue { background: #29b6f6; } 
 
     /* 修煉頁面新樣式 */
     .achieve-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; font-size: 14px;}
@@ -89,7 +104,14 @@
     .btn-plus:active { background: #ddd; transform: scale(0.9); }
     .today-dashboard { background: #f0f4c3; padding: 10px; border-radius: 10px; margin-top: 10px; font-size: 12px; color: #555; text-align: center; border: 1px solid #dce775; }
 
-    /* Modal & Log */
+    /* 日曆樣式 (修復) */
+    .calendar-ctrl { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+    .calendar-ctrl button { background: none; border: 1px solid #ddd; border-radius: 5px; padding: 2px 10px; cursor: pointer; color: #555; }
+    .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; width: 100%; margin-top: 10px; }
+    .cal-day { aspect-ratio: 1; border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 10px; background: #eee; color: #aaa; position: relative; overflow: hidden; }
+    .cal-fill-1 { background: #c8e6c9; color: #2e7d32; } .cal-fill-2 { background: #81c784; color: #1b5e20; } .cal-fill-3 { background: #4caf50; color: #fff; font-weight:bold; }
+
+    /* Log & Modal */
     #modal-overlay { position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:2000; display:none; justify-content:center; align-items:center; }
     .modal-box { background:#fff; padding:20px; border-radius:15px; width:85%; max-width:320px; max-height:80%; overflow-y:auto; position:relative; }
     .modal-close { position:absolute; top:10px; right:15px; font-size:20px; cursor:pointer; color:#aaa; }
@@ -104,13 +126,17 @@
     .spinner { width: 30px; height: 30px; border: 4px solid #f3f3f3; border-top: 4px solid var(--primary); border-radius: 50%; animation: spin 1s linear infinite; }
     @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     
-    /* 開關樣式 */
+    /* Switch */
     .switch { position: relative; display: inline-block; width: 40px; height: 20px; }
     .switch input { opacity: 0; width: 0; height: 0; }
     .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 20px; }
     .slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 2px; bottom: 2px; background-color: white; transition: .4s; border-radius: 50%; }
     input:checked + .slider { background-color: var(--primary); }
     input:checked + .slider:before { transform: translateX(20px); }
+    
+    .profile-stats { margin-top: 15px; border-top: 1px dashed #eee; padding-top: 10px; font-size: 12px; line-height: 1.8; color: #555; }
+    .profile-logs { margin-top: 15px; border-top: 1px dashed #eee; padding-top: 10px; font-size: 12px; }
+    .profile-logs h5 { margin: 0 0 10px 0; color: #666; }
   </style>
 </head>
 <body>
@@ -302,17 +328,16 @@
   </div>
 
   <script>
-    const API_URL = "https://script.google.com/macros/s/AKfycbxHe88NVoiJkAt2pvBnCYUk_xGul1FhXTAj0kyAXA9GEIddXB1AD8j4gtjhbDEASPSr/exec";
+    const API_URL = "https://script.google.com/macros/s/AKfycbxHe88NVoiJkAt2pvBnCYUk_xGul1FhXTAj0kyAXA9GEIddXB1AD8j4gtjhbDEASPSr/exec"; // 請確認此 URL 正確
 
     var gUser=null, gPass=null, gData={}, menuConfig={};
     var timerInt=null, isTimer=false, lastLogTime=0;
     var curYear = new Date().getFullYear();
     var curMonth = new Date().getMonth() + 1;
     
-    // 計時器：離開頁面自動暫停
     document.addEventListener("visibilitychange", function() {
       if (document.hidden && isTimer) {
-        toggleTimer(); // 暫停
+        toggleTimer(); 
         alert("因離開畫面，計時已自動暫停。");
       }
     });
@@ -335,7 +360,6 @@
             } else { loading(false); }
         });
         
-        // 載入本地提醒設定
         var savedTime = localStorage.getItem("reminder_time");
         if(savedTime) document.getElementById('reminder-time').value = savedTime;
     }
@@ -406,7 +430,6 @@
       document.getElementById('auth-screen').style.display='none';
       document.getElementById('game-screen').style.display='flex';
       renderUI();
-      // 檢查推播開關狀態 (預設開啟)
       var notifyPref = localStorage.getItem("notify_pref") || "on";
       document.getElementById('notify-switch').checked = (notifyPref === "on");
     }
@@ -416,7 +439,6 @@
     function renderUI(){
       document.getElementById('ui-team').innerText = gData.teamFull;
       document.getElementById('p-job').innerText = gData.job;
-      // 這裡的 spoke_count 就是今天的數量 (後端每天會歸零)
       updateDashboard();
       
       var ck = document.getElementById('ck-sport');
@@ -432,12 +454,6 @@
     }
     
     function updateDashboard() {
-       // 計算今日累積 (資料庫的 + 輸入框的)
-       // 因為 gData.spoke_count 是今天「已存檔」的，輸入框是「未存檔」的增量？
-       // 不，我們簡化邏輯：輸入框顯示 gData.spoke_count，按 +1 直接改 gData 並顯示
-       // 但為了還沒按「確認紀錄」前能反悔，我們讓 dashboard 顯示 (gData + input增量)
-       // 修正：簡單點，輸入框預設 0，代表「新增量」。Dashboard 顯示 gData + 新增量
-       
        var addS = parseInt(document.getElementById('inp-spoke').value||0);
        var addC = parseInt(document.getElementById('inp-conv').value||0);
        var addCl = parseInt(document.getElementById('inp-class').value||0);
@@ -475,7 +491,6 @@
       
       if(addS==0 && addC==0 && addCl==0) { alert("請輸入數量"); return; }
 
-      // 更新 gData
       gData.spoke_count = (gData.spoke_count||0) + addS;
       gData.convert_count = (gData.convert_count||0) + addC;
       gData.class_count = (gData.class_count||0) + addCl;
@@ -484,11 +499,10 @@
       var msg = `開口${addS}, 渡眾${addC}, 入班${addCl}`;
       callApi('saveGameData', {u:gUser, p:gPass, data:gData, log:{action:"回報成果", detail: msg}}).then(r => {
         loading(false);
-        // 清空輸入框
         document.getElementById('inp-spoke').value=0;
         document.getElementById('inp-conv').value=0;
         document.getElementById('inp-class').value=0;
-        renderUI(); // 更新 Dashboard
+        renderUI(); 
         alert("📜 紀錄已同步！");
       });
     }
@@ -499,7 +513,6 @@
       var isOn = document.getElementById('notify-switch').checked;
       var tagVal = isOn ? "instant" : "daily";
       
-      // 更新 OneSignal Tag
       if(window.OneSignalDeferred) {
         OneSignalDeferred.push(function(OneSignal) {
            OneSignal.User.addTag("notify", tagVal);
@@ -509,11 +522,9 @@
     }
 
     function setLocalReminder() {
-       // 設定每天固定時間跳出本地通知 (需瀏覽器支援)
-       // 目前簡單實作：存入 localStorage，未來可結合 OneSignal Local Notification 功能
        var t = document.getElementById('reminder-time').value;
        localStorage.setItem("reminder_time", t);
-       alert("提醒時間已設定為 " + t + " (需保持網頁背景執行或依賴瀏覽器排程)");
+       alert("提醒時間已設定為 " + t);
     }
     
     function changeMonth(delta) {
@@ -530,21 +541,29 @@
       document.getElementById('profile-log-list').innerHTML = "";
 
       callApi('getCalendarData', {u:gUser, year:curYear, month:curMonth}).then(res => {
+        // --- 修復日曆渲染邏輯 ---
+        var daysInMonth = new Date(curYear, curMonth, 0).getDate();
         var html = "";
-        // 略... (Calendar render logic same as before)
-        // 為了節省篇幅，這裡使用簡化的渲染
-        Object.keys(res.cal).forEach(d => {
-             // ... 顯示日曆格子 ...
-        });
-        document.getElementById('calendar-area').innerHTML = "日曆載入完成 (示意)";
+        for(var d=1; d<=daysInMonth; d++) {
+           var dStr = mStr + "-" + (d<10?"0"+d:d);
+           var dayData = res.cal[dStr];
+           var cls = "cal-day";
+           if(dayData) {
+             var count = 0;
+             if(dayData.read) count++;
+             if(dayData.sport) count++;
+             if(dayData.achieve) count++;
+             if(count > 0) cls += " cal-fill-" + count;
+           }
+           html += `<div class="${cls}">${d}</div>`;
+        }
+        document.getElementById('calendar-area').innerHTML = html;
         
-        // 顯示統計
         var s = res.stats;
         document.getElementById('profile-stats').innerHTML = `
           <b>📊 ${mStr} 月報表</b><br>
           運動: ${s.sportDays}天 | 讀書: ${s.readDays}天 | 開口: ${s.totalSpoke}`;
           
-        // 顯示列表 (含日期)
         var logHtml = "";
         res.logs.forEach(l => {
            logHtml += `<div class="log-item"><div class="log-time" style="width:80px;">${l.time}</div><div class="log-content"><b>${l.action}</b> ${l.detail}</div></div>`;
@@ -560,14 +579,28 @@
         var html = "";
         for(var key in data){
           var h = data[key];
-          // 增加文字說明
-          var info = `開口:${h.spoke} 渡眾:${h.convert} 入班:${h.joinClass}`;
-          html += `<div class="tree-container tree-scale-m" onclick="openHallModal('${h.name}', '${info}')">
-             <div class="tree-canopy">
-               <span style="color:#fff; font-size:10px; font-weight:bold;">${h.name}</span>
-             </div>
+          // --- 修復果實生成邏輯 ---
+          var fruits = "";
+          var sp = Number(h.spoke)||0;
+          var cv = Number(h.convert)||0;
+          var cl = Number(h.joinClass)||0;
+          
+          var redFruits = Math.floor(sp / 10);
+          var totalPoints = redFruits + cv + cl;
+          var treeClass = "tree-scale-s";
+          if(totalPoints > 20) treeClass = "tree-scale-l";
+          else if(totalPoints > 5) treeClass = "tree-scale-m";
+          
+          for(var i=0; i<redFruits && i<10; i++) fruits += '<div class="fruit red"></div>';
+          for(var i=0; i<cv && i<10; i++) fruits += '<div class="fruit gold"></div>';
+          for(var i=0; i<cl && i<10; i++) fruits += '<div class="fruit blue"></div>';
+          if(totalPoints == 0) fruits = '<span style="font-size:10px; color:#fff;">種子</span>';
+
+          var info = `開口:${sp} 渡眾:${cv} 入班:${cl}`;
+          html += `<div class="tree-container ${treeClass}" onclick="openHallModal('${h.name}', '${info}')">
+             <div class="tree-canopy">${fruits}</div>
              <div class="tree-trunk"></div>
-             <div class="tree-label">${h.members} 人</div>
+             <div class="tree-label">${h.name}<br><span style="font-size:10px;">${h.members}人</span></div>
           </div>`;
         }
         document.getElementById('orchard-container').innerHTML = html || "無資料";
@@ -577,7 +610,6 @@
     function openHallModal(name, info) {
        document.getElementById('modal-overlay').style.display = 'flex';
        document.getElementById('modal-title').innerText = name;
-       // 顯示詳細統計
        document.getElementById('modal-content').innerHTML = `
          <div style="background:#f1f8e9; padding:10px; border-radius:10px; margin-bottom:10px;">
            <b>📊 公堂總成績</b><br>${info}
@@ -599,14 +631,93 @@
        callApi('updateMarquee', {msg:msg}).then(r => { alert(r.msg); document.getElementById('marquee-text').innerText = msg; });
     }
     
-    function loadAdminFilters() { initMaj(); } // 重用
+    function loadAdminFilters() { initMaj(); } 
     function admUpdMin() { 
        var m=document.getElementById('adm-maj').value, s=document.getElementById('adm-min'); s.innerHTML="<option value='全部'>全部公堂</option>";
        if(menuConfig[m]) menuConfig[m].forEach(x => { var o=document.createElement('option'); o.value=x; o.innerText=x; s.appendChild(o); });
     }
-    function runAdminQuery() { /* 同前版，略 */ }
-    function sendBroadcast() { /* 同前版，略 */ }
-    function loadGlobalLogs() { /* 同前版，略 */ }
+    function runAdminQuery() { 
+      var filters = {
+        major: document.getElementById('adm-maj').value,
+        minor: document.getElementById('adm-min').value,
+        hasSport: document.getElementById('f-sport').checked,
+        hasRead: document.getElementById('f-read').checked,
+        hasSpoke: document.getElementById('f-spoke').checked,
+        hasConv: document.getElementById('f-conv').checked,
+        hasClass: document.getElementById('f-class').checked
+      };
+      var mode = document.getElementById('adm-mode').value;
+      var dateVal = "";
+      if(mode === 'date') dateVal = document.getElementById('adm-date').value;
+      if(mode === 'month') dateVal = document.getElementById('adm-month').value;
+      
+      loading(true);
+      callApi('getAdminReport', {filters:filters, mode:mode, dateVal:dateVal}).then(res => {
+        loading(false);
+        var st = res.stats;
+        var repHtml = `
+          <div><b>[${mode === 'all' ? '全部歷史' : dateVal}]</b></div>
+          <div>篩選人數: <b>${st.count}</b></div>
+          <div>累計開口: ${st.totalSpoke} | 渡眾: ${st.totalConv} | 入班: ${st.totalClass}</div>
+          <div>運動人次: ${st.totalSport}</div>
+        `;
+        document.getElementById('admin-report').innerHTML = repHtml;
+        document.getElementById('admin-report').style.display = 'block';
+
+        var listHtml = "";
+        if(res.list.length == 0) listHtml = "<div style='text-align:center; color:#999;'>無符合資料</div>";
+        res.list.forEach(function(u){
+           var badges = "";
+           if(u.sportCount > 0) badges += `<span style='background:#8bc34a'>運${u.sportCount}</span>`;
+           if(u.readCount > 0) badges += `<span style='background:#81d4fa'>讀${u.readCount}</span>`;
+           if(u.spoke > 0) badges += `<span style='background:#ff8a80'>開${u.spoke}</span>`;
+           if(u.conv > 0) badges += `<span style='background:#ffd54f'>渡${u.conv}</span>`;
+
+           listHtml += `
+           <div class="admin-row">
+             <div style="flex:1">
+               <div style="font-weight:bold;">${u.name}</div>
+               <div style="font-size:10px; color:#999;">${u.minor}</div>
+             </div>
+             <div class="admin-stat-badges" style="text-align:right;">${badges}</div>
+           </div>`;
+        });
+        document.getElementById('admin-list').innerHTML = listHtml;
+      });
+    }
+    
+    function sendBroadcast() { 
+      var msg = document.getElementById('broadcast-msg').value;
+      if (!msg) { alert("請輸入訊息內容"); return; }
+      
+      if(confirm("確定要發送這則通知給所有人嗎？")) {
+        loading(true);
+        callApi('broadcast', {msg: msg, time: null}).then(res => {
+          loading(false);
+          if (res.success) {
+            alert("發送成功");
+            document.getElementById('broadcast-msg').value = "";
+          } else {
+            alert("發送失敗: " + res.msg);
+          }
+        });
+      }
+    }
+    function loadGlobalLogs(){ 
+      var c = document.getElementById('log-container'); c.innerHTML = '<div style="padding:20px; text-align:center;">讀取中...</div>';
+      callApi('getGlobalLogs').then(res => {
+        var h = "";
+        if(res.list.length==0) h='<div style="padding:20px; text-align:center;">尚無紀錄</div>';
+        res.list.forEach(function(l){
+          var color = "#eee";
+          if(l.action.includes("運動")) color="#e8f5e9"; 
+          if(l.action.includes("讀書")) color="#e3f2fd"; 
+          if(l.action.includes("回報")) color="#fff3e0"; 
+          h += `<div class="log-item"><div class="log-time">${l.time}</div><div class="log-content"><span style="font-weight:bold; color:#555;">${l.user}</span> <span class="log-tag" style="background:${color}">${l.action}</span><span>${l.detail}</span><div style="font-size:9px; color:#bbb;">(${l.hall})</div></div></div>`;
+        });
+        c.innerHTML = h;
+      });
+    }
   </script>
 </body>
 </html>
