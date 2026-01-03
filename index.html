@@ -10,7 +10,7 @@
   <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
   <script>
     // 🔴 版本更新，強制刷新介面
-    const APP_VERSION = "20250104-AdminFix-V3"; 
+    const APP_VERSION = "20250104-AdminFix-V4"; 
 
     (function checkUpdate() {
       const savedVersion = localStorage.getItem("app_version");
@@ -45,7 +45,7 @@
   </script>
 
   <style>
-    /* 全域設定 */
+    /* CSS 樣式 */
     :root { --bg-color: #fdfbf7; --card-bg: #ffffff; --primary: #8bc34a; --accent: #ffb74d; --blue: #81d4fa; --red: #ff8a80; --text: #5d5d5d; --shadow: 0 4px 12px rgba(0,0,0,0.08); }
     * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
     body { font-family: 'Varela Round', sans-serif; background: var(--bg-color); color: var(--text); margin: 0; height: 100vh; display: flex; flex-direction: column; overflow: hidden;}
@@ -342,7 +342,7 @@
     var curYear = new Date().getFullYear();
     var curMonth = new Date().getMonth() + 1;
     
-    // 🔴 上線提醒：每分鐘檢查一次 (本地)
+    // 🔴 上線提醒
     setInterval(function(){
       var setTime = localStorage.getItem("reminder_time");
       if(!setTime) return;
@@ -355,7 +355,6 @@
       
       if (nowStr === setTime && lastRemind !== today) {
          localStorage.setItem("last_remind_date", today);
-         // 嘗試發送 Notification (需授權)
          if(Notification.permission === 'granted') {
             new Notification("賢德志士", { body: "⏰ 時間到了！記得上線寫下白陽歷史！" });
          } else if (Notification.permission !== 'denied') {
@@ -386,7 +385,6 @@
             menuConfig = cfg.menu;
             if(cfg.announcement) document.getElementById('marquee-text').innerText = cfg.announcement;
             
-            // 🔴 分別初始化
             initRegDropdowns();
             initAdminDropdowns();
             
@@ -416,7 +414,6 @@
 
     function loading(x){ document.getElementById('loading').style.display = x?'flex':'none'; }
 
-    // --- UI/UX Functions ---
     function initRegDropdowns(){
       var s=document.getElementById('r-maj'); 
       var opts = "<option disabled selected>選擇團隊</option>";
@@ -429,7 +426,7 @@
       var opts = "<option value='全部'>全部團隊</option>";
       for(var k in menuConfig){ opts += `<option value="${k}">${k}</option>`; }
       s.innerHTML = opts;
-      admUpdMin(); // 順便初始化公堂
+      admUpdMin(); 
     }
     
     function updMinor(){
@@ -501,7 +498,6 @@
       document.getElementById('ui-team').innerText = gData.teamFull;
       document.getElementById('p-job').innerText = gData.job;
       updateDashboard();
-      
       var ck = document.getElementById('ck-sport');
       if(gData.task_sport_done){ ck.style.background='var(--primary)'; ck.style.borderColor='var(--primary)'; }
       else { ck.style.background='transparent'; ck.style.borderColor='#ddd'; }
@@ -514,7 +510,6 @@
        updateDashboard();
     }
     
-    // 🔴 新增減號邏輯
     function minusCount(id) {
        var el = document.getElementById(id);
        var val = parseInt(el.value || 0);
@@ -701,64 +696,99 @@
        callApi('updateMarquee', {msg:msg}).then(r => { alert(r.msg); document.getElementById('marquee-text').innerText = msg; });
     }
     
+    function loadAdminFilters() { 
+       // 重用 initMaj 來載入選單，但要確保 menuConfig 已經有資料
+       if(Object.keys(menuConfig).length > 0) {
+          initMaj();
+       } else {
+          // 若還沒載入，這裡只是個保險，其實 onload 已經處理了
+          callApi('getConfig').then(cfg => {
+             menuConfig = cfg.menu;
+             initMaj();
+          });
+       }
+    } 
+    
+    function admUpdMin() { 
+       var m=document.getElementById('adm-maj').value, s=document.getElementById('adm-min'); 
+       s.innerHTML="<option value='全部'>全部公堂</option>";
+       if(m !== '全部' && menuConfig[m]) {
+          menuConfig[m].forEach(x => { var o=document.createElement('option'); o.value=x; o.innerText=x; s.appendChild(o); });
+       }
+    }
+    
+    // 🔴 關鍵修正：加入 Try-Catch 與錯誤處理
     function runAdminQuery() { 
-      // 防呆：確保資料已載入
-      if(Object.keys(menuConfig).length === 0) { alert("系統資料載入中，請稍後再試..."); return; }
+      try {
+        if(Object.keys(menuConfig).length === 0) { alert("系統資料載入中，請稍後再試..."); return; }
 
-      var filters = {
-        major: document.getElementById('adm-maj').value,
-        minor: document.getElementById('adm-min').value,
-        hasSport: document.getElementById('f-sport').checked,
-        hasRead: document.getElementById('f-read').checked,
-        hasSpoke: document.getElementById('f-spoke').checked,
-        hasConv: document.getElementById('f-conv').checked,
-        hasClass: document.getElementById('f-class').checked
-      };
-      var mode = document.getElementById('adm-mode').value;
-      var dateVal = "";
-      if(mode === 'date') dateVal = document.getElementById('adm-date').value;
-      if(mode === 'month') dateVal = document.getElementById('adm-month').value;
-      
-      loading(true);
-      callApi('getAdminReport', {filters:filters, mode:mode, dateVal:dateVal}).then(res => {
-        loading(false);
-        // 🔴 關鍵修正：當資料為 0 筆時，顯示友善提示，而不是空白
-        if(!res.list || res.list.length === 0) { 
-           document.getElementById('admin-report').style.display = 'block';
-           document.getElementById('admin-report').innerHTML = "<div style='text-align:center; color:#666;'>⚠️ 查無符合條件的資料</div>";
-           document.getElementById('admin-list').innerHTML = "";
-           return; 
-        }
+        var filters = {
+          major: document.getElementById('adm-maj').value,
+          minor: document.getElementById('adm-min').value,
+          hasSport: document.getElementById('f-sport').checked,
+          hasRead: document.getElementById('f-read').checked,
+          hasSpoke: document.getElementById('f-spoke').checked,
+          hasConv: document.getElementById('f-conv').checked,
+          hasClass: document.getElementById('f-class').checked
+        };
+        var mode = document.getElementById('adm-mode').value;
+        var dateVal = "";
+        if(mode === 'date') dateVal = document.getElementById('adm-date').value;
+        if(mode === 'month') dateVal = document.getElementById('adm-month').value;
         
-        var st = res.stats;
-        var repHtml = `
-          <div><b>[${mode === 'all' ? '全部歷史' : dateVal}]</b></div>
-          <div>篩選人數: <b>${st.count}</b></div>
-          <div>累計開口: ${st.totalSpoke} | 渡眾: ${st.totalConv} | 入班: ${st.totalClass}</div>
-          <div>運動人次: ${st.totalSport}</div>
-        `;
-        document.getElementById('admin-report').innerHTML = repHtml;
-        document.getElementById('admin-report').style.display = 'block';
+        loading(true);
+        callApi('getAdminReport', {filters:filters, mode:mode, dateVal:dateVal}).then(res => {
+          loading(false);
+          
+          if(res.error) {
+             alert("系統錯誤: " + res.error);
+             return;
+          }
 
-        var listHtml = "";
-        res.list.forEach(function(u){
-           var badges = "";
-           if(u.sportCount > 0) badges += `<span style='background:#8bc34a'>運${u.sportCount}</span>`;
-           if(u.readCount > 0) badges += `<span style='background:#81d4fa'>讀${u.readCount}</span>`;
-           if(u.spoke > 0) badges += `<span style='background:#ff8a80'>開${u.spoke}</span>`;
-           if(u.conv > 0) badges += `<span style='background:#ffd54f'>渡${u.conv}</span>`;
+          // 顯示查無資料的提示
+          if(!res.list || res.list.length === 0) { 
+             document.getElementById('admin-report').style.display = 'block';
+             document.getElementById('admin-report').innerHTML = "<div style='text-align:center; color:#666; padding:10px;'>⚠️ 查無符合條件的資料</div>";
+             document.getElementById('admin-list').innerHTML = "";
+             return; 
+          }
+          
+          var st = res.stats;
+          var repHtml = `
+            <div><b>[${mode === 'all' ? '全部歷史' : dateVal}]</b></div>
+            <div>篩選人數: <b>${st.count}</b></div>
+            <div>累計開口: ${st.totalSpoke} | 渡眾: ${st.totalConv} | 入班: ${st.totalClass}</div>
+            <div>運動人次: ${st.totalSport}</div>
+          `;
+          document.getElementById('admin-report').innerHTML = repHtml;
+          document.getElementById('admin-report').style.display = 'block';
 
-           listHtml += `
-           <div class="admin-row">
-             <div style="flex:1">
-               <div style="font-weight:bold;">${u.name}</div>
-               <div style="font-size:10px; color:#999;">${u.minor}</div>
-             </div>
-             <div class="admin-stat-badges" style="text-align:right;">${badges}</div>
-           </div>`;
+          var listHtml = "";
+          res.list.forEach(function(u){
+             var badges = "";
+             if(u.sportCount > 0) badges += `<span style='background:#8bc34a'>運${u.sportCount}</span>`;
+             if(u.readCount > 0) badges += `<span style='background:#81d4fa'>讀${u.readCount}</span>`;
+             if(u.spoke > 0) badges += `<span style='background:#ff8a80'>開${u.spoke}</span>`;
+             if(u.conv > 0) badges += `<span style='background:#ffd54f'>渡${u.conv}</span>`;
+
+             listHtml += `
+             <div class="admin-row">
+               <div style="flex:1">
+                 <div style="font-weight:bold;">${u.name}</div>
+                 <div style="font-size:10px; color:#999;">${u.minor}</div>
+               </div>
+               <div class="admin-stat-badges" style="text-align:right;">${badges}</div>
+             </div>`;
+          });
+          document.getElementById('admin-list').innerHTML = listHtml;
+        }).catch(err => {
+           loading(false);
+           alert("連線失敗: " + err);
         });
-        document.getElementById('admin-list').innerHTML = listHtml;
-      });
+      } catch(e) {
+         loading(false);
+         alert("前端錯誤: " + e.message);
+      }
     }
     
     function sendBroadcast() { 
