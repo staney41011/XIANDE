@@ -9,8 +9,8 @@
   
   <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
   <script>
-    // 🔴 版本號更新：讓使用者自動抓取新介面
-    const APP_VERSION = "20250104-FixiOS"; 
+    // 🔴 版本號更新：強制刷新介面
+    const APP_VERSION = "20250104-FixNav-V3"; 
 
     // --- 自動更新機制 ---
     (function checkUpdate() {
@@ -40,8 +40,6 @@
         appId: "2c0c1bb1-f413-474e-bc2d-45586547b981", 
         notifyButton: { enable: true },
         allowLocalhostAsSecureOrigin: true,
-        // 若您的網址是 staney41011.github.io (根目錄)，請移除 path 設定
-        // 若是 staney41011.github.io/XIANDE/，請保留下方設定
         path: "/XIANDE/", 
         serviceWorkerPath: "OneSignalSDKWorker.js",
         serviceWorkerParam: { scope: "/XIANDE/" }
@@ -56,32 +54,48 @@
     * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
     body { font-family: 'Varela Round', sans-serif; background: var(--bg-color); color: var(--text); margin: 0; height: 100vh; display: flex; flex-direction: column; overflow: hidden;}
     
-    /* 導航列修復：改用 padding 撐開高度，移除強制 height，適應 iOS */
+    /* 🔴 導航列修正 (回復經典樣式 + 固定底部) */
     .bottom-nav { 
+      position: fixed;        /* 強制固定在視窗最底部 */
+      bottom: 0;
+      left: 0;
+      width: 100%;
       background: #fff; 
       border-top: 1px solid #eee; 
       display: flex; 
       justify-content: space-around; 
       align-items: center;
-      flex-shrink: 0; /* 禁止被壓縮 */
+      z-index: 1000;          /* 確保在最上層 */
       
-      /* 關鍵修復：上留白 + 底部安全區域 */
-      padding-top: 8px;
-      padding-bottom: calc(8px + env(safe-area-inset-bottom)); 
+      /* 高度設定：回復原本的舒適高度 */
+      height: 60px; 
       
-      /* 確保在 Android/iOS 都能正常顯示 */
-      min-height: 55px; 
-      z-index: 100;
+      /* iOS 安全區域：只在有 Home Bar 的手機增加底部空間 */
+      padding-bottom: env(safe-area-inset-bottom);
+      box-sizing: content-box; /* 讓 padding 不會壓縮到 height */
     }
+    
     .nav-btn { background: none; border: none; color: #ccc; font-size: 10px; flex: 1; text-align: center; cursor: pointer; }
     .nav-btn.active { color: var(--primary); transform: scale(1.1); transition: 0.2s;}
     .nav-icon { font-size: 20px; display: block; margin-bottom: 2px; }
 
     /* 主要內容區 */
-    .viewport { flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; align-items: center; width: 100%; padding-bottom: 20px; }
     .top-nav { background: #fff; padding: 10px 15px; display: flex; flex-direction: column; box-shadow: 0 2px 5px rgba(0,0,0,0.05); z-index: 10; flex-shrink: 0;}
     .nav-header { display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 5px;}
     
+    /* 🔴 視窗修正：確保內容可以捲動到底，不被工具列擋住 */
+    .viewport { 
+      flex: 1; 
+      overflow-y: auto; 
+      padding: 15px; 
+      display: flex; 
+      flex-direction: column; 
+      align-items: center; 
+      width: 100%; 
+      /* 底部留白 = 工具列高度(60) + 安全區緩衝 + 額外空間(20) */
+      padding-bottom: 100px; 
+    }
+
     /* 卡片與元件 */
     .card { background: var(--card-bg); border-radius: 20px; box-shadow: var(--shadow); padding: 20px; margin-bottom: 15px; width: 95%; max-width: 380px; border: 2px solid #fff; margin-left: auto; margin-right: auto; position: relative;}
     .btn { width: 100%; padding: 12px; border-radius: 12px; border: none; font-weight: bold; color: #fff; cursor: pointer; margin-top: 5px; box-shadow: 0 3px 0 rgba(0,0,0,0.1); }
@@ -114,14 +128,14 @@
     .fruit { width: 12px; height: 12px; border-radius: 50%; margin: 2px; box-shadow: 1px 1px 2px rgba(0,0,0,0.2); flex-shrink: 0;}
     .fruit.red { background: var(--red); } .fruit.gold { background: #ffd700; } .fruit.blue { background: #29b6f6; } 
 
-    /* 修煉頁面：新增減號按鈕樣式 */
+    /* 修煉頁面：減號按鈕樣式 */
     .achieve-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; font-size: 14px;}
     .achieve-input-group { display: flex; align-items: center; gap: 8px; }
     .achieve-input { width: 50px; text-align: center; border: 2px solid #eee; border-radius: 8px; padding: 5px; font-weight: bold; color: var(--text); background:#fafafa;}
-    /* 加號按鈕 */
+    
     .btn-plus { width: 32px; height: 32px; border-radius: 50%; border: none; background: #e8f5e9; color: var(--primary); font-weight: bold; cursor: pointer; display: flex; justify-content: center; align-items: center; font-size: 18px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
     .btn-plus:active { background: #c8e6c9; transform: scale(0.9); }
-    /* 減號按鈕 */
+    
     .btn-minus { width: 32px; height: 32px; border-radius: 50%; border: none; background: #eee; color: #777; font-weight: bold; cursor: pointer; display: flex; justify-content: center; align-items: center; font-size: 18px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
     .btn-minus:active { background: #ddd; transform: scale(0.9); }
 
