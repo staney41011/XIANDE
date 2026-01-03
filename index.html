@@ -9,23 +9,19 @@
   
   <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
   <script>
-    // 🔴 版本號更新：強制刷新介面
-    const APP_VERSION = "20250104-FixNav-V3"; 
+    const APP_VERSION = "20250104-FixBugs-V1"; 
 
-    // --- 自動更新機制 ---
     (function checkUpdate() {
       const savedVersion = localStorage.getItem("app_version");
       if (savedVersion !== APP_VERSION) {
-        console.log(`偵測到新版本: ${APP_VERSION}，更新中...`);
+        console.log(`更新版本: ${APP_VERSION}`);
         if ('serviceWorker' in navigator) {
-          navigator.serviceWorker.getRegistrations().then(function(registrations) {
-            for (let registration of registrations) { registration.unregister(); }
+          navigator.serviceWorker.getRegistrations().then(function(regs) {
+            for (let reg of regs) { reg.unregister(); }
           });
         }
         if ('caches' in window) {
-          caches.keys().then(function(names) {
-            for (let name of names) { caches.delete(name); }
-          });
+          caches.keys().then(function(names) { for (let name of names) caches.delete(name); });
         }
         localStorage.setItem("app_version", APP_VERSION);
         setTimeout(() => { window.location.reload(true); }, 500);
@@ -33,13 +29,13 @@
       }
     })();
 
-    // --- OneSignal 初始化 ---
     window.OneSignalDeferred = window.OneSignalDeferred || [];
     OneSignalDeferred.push(function(OneSignal) {
       OneSignal.init({
         appId: "2c0c1bb1-f413-474e-bc2d-45586547b981", 
         notifyButton: { enable: true },
         allowLocalhostAsSecureOrigin: true,
+        // 若在根目錄，移除 path；若在 XIANDE 資料夾，保留 path
         path: "/XIANDE/", 
         serviceWorkerPath: "OneSignalSDKWorker.js",
         serviceWorkerParam: { scope: "/XIANDE/" }
@@ -49,73 +45,43 @@
   </script>
 
   <style>
-    /* 全域設定 */
     :root { --bg-color: #fdfbf7; --card-bg: #ffffff; --primary: #8bc34a; --accent: #ffb74d; --blue: #81d4fa; --red: #ff8a80; --text: #5d5d5d; --shadow: 0 4px 12px rgba(0,0,0,0.08); }
     * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
     body { font-family: 'Varela Round', sans-serif; background: var(--bg-color); color: var(--text); margin: 0; height: 100vh; display: flex; flex-direction: column; overflow: hidden;}
     
-    /* 🔴 導航列修正 (回復經典樣式 + 固定底部) */
+    /* 導航列：固定底部 */
     .bottom-nav { 
-      position: fixed;        /* 強制固定在視窗最底部 */
-      bottom: 0;
-      left: 0;
-      width: 100%;
-      background: #fff; 
-      border-top: 1px solid #eee; 
-      display: flex; 
-      justify-content: space-around; 
-      align-items: center;
-      z-index: 1000;          /* 確保在最上層 */
-      
-      /* 高度設定：回復原本的舒適高度 */
-      height: 60px; 
-      
-      /* iOS 安全區域：只在有 Home Bar 的手機增加底部空間 */
+      position: fixed; bottom: 0; left: 0; width: 100%;
+      background: #fff; border-top: 1px solid #eee; 
+      display: flex; justify-content: space-around; align-items: center;
+      z-index: 1000; height: 60px; 
       padding-bottom: env(safe-area-inset-bottom);
-      box-sizing: content-box; /* 讓 padding 不會壓縮到 height */
+      box-sizing: content-box; 
     }
-    
     .nav-btn { background: none; border: none; color: #ccc; font-size: 10px; flex: 1; text-align: center; cursor: pointer; }
     .nav-btn.active { color: var(--primary); transform: scale(1.1); transition: 0.2s;}
     .nav-icon { font-size: 20px; display: block; margin-bottom: 2px; }
 
-    /* 主要內容區 */
+    .viewport { flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; align-items: center; width: 100%; padding-bottom: 100px; }
     .top-nav { background: #fff; padding: 10px 15px; display: flex; flex-direction: column; box-shadow: 0 2px 5px rgba(0,0,0,0.05); z-index: 10; flex-shrink: 0;}
     .nav-header { display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 5px;}
     
-    /* 🔴 視窗修正：確保內容可以捲動到底，不被工具列擋住 */
-    .viewport { 
-      flex: 1; 
-      overflow-y: auto; 
-      padding: 15px; 
-      display: flex; 
-      flex-direction: column; 
-      align-items: center; 
-      width: 100%; 
-      /* 底部留白 = 工具列高度(60) + 安全區緩衝 + 額外空間(20) */
-      padding-bottom: 100px; 
-    }
-
-    /* 卡片與元件 */
     .card { background: var(--card-bg); border-radius: 20px; box-shadow: var(--shadow); padding: 20px; margin-bottom: 15px; width: 95%; max-width: 380px; border: 2px solid #fff; margin-left: auto; margin-right: auto; position: relative;}
     .btn { width: 100%; padding: 12px; border-radius: 12px; border: none; font-weight: bold; color: #fff; cursor: pointer; margin-top: 5px; box-shadow: 0 3px 0 rgba(0,0,0,0.1); }
     .btn:active { transform: translateY(2px); box-shadow: none; }
     .btn-primary { background: var(--blue); } .btn-success { background: var(--primary); } .btn-warn { background: var(--accent); }
     .input-field { width: 100%; padding: 10px; margin: 5px 0; border: 2px solid #eee; border-radius: 10px; background: #fafafa; outline: none; font-family: inherit;}
     
-    /* 頁面切換動畫 */
     .view-section { display: none; width: 100%; animation: fadeIn 0.3s; } 
     .view-section.active { display: block; }
     @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
     
-    /* 登入與其他 */
     #auth-screen { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; background: linear-gradient(135deg, #e0f7fa, #fff3e0); width: 100%; position: absolute; top:0; left:0; height: 100%; z-index: 200; }
     #game-screen { display: none; height: 100%; flex-direction: column; width: 100%; }
     .marquee-container { background: #d32f2f; color: #fff; font-size: 12px; white-space: nowrap; overflow: hidden; border-radius: 4px; padding: 2px 0; width: 100%; }
     .marquee-text { display: inline-block; padding-left: 100%; animation: scroll 15s linear infinite; }
     @keyframes scroll { 0% { transform: translateX(0); } 100% { transform: translateX(-100%); } }
 
-    /* 果樹 */
     .orchard-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 20px; width: 100%; padding-bottom: 20px;}
     .tree-container { text-align: center; margin-bottom: 10px; cursor: pointer; transition: transform 0.1s; position: relative;}
     .tree-container:active { transform: scale(0.95); }
@@ -128,46 +94,34 @@
     .fruit { width: 12px; height: 12px; border-radius: 50%; margin: 2px; box-shadow: 1px 1px 2px rgba(0,0,0,0.2); flex-shrink: 0;}
     .fruit.red { background: var(--red); } .fruit.gold { background: #ffd700; } .fruit.blue { background: #29b6f6; } 
 
-    /* 修煉頁面：減號按鈕樣式 */
     .achieve-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; font-size: 14px;}
     .achieve-input-group { display: flex; align-items: center; gap: 8px; }
     .achieve-input { width: 50px; text-align: center; border: 2px solid #eee; border-radius: 8px; padding: 5px; font-weight: bold; color: var(--text); background:#fafafa;}
-    
     .btn-plus { width: 32px; height: 32px; border-radius: 50%; border: none; background: #e8f5e9; color: var(--primary); font-weight: bold; cursor: pointer; display: flex; justify-content: center; align-items: center; font-size: 18px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
     .btn-plus:active { background: #c8e6c9; transform: scale(0.9); }
-    
     .btn-minus { width: 32px; height: 32px; border-radius: 50%; border: none; background: #eee; color: #777; font-weight: bold; cursor: pointer; display: flex; justify-content: center; align-items: center; font-size: 18px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
     .btn-minus:active { background: #ddd; transform: scale(0.9); }
-
     .today-dashboard { background: #f0f4c3; padding: 10px; border-radius: 10px; margin-top: 10px; font-size: 12px; color: #555; text-align: center; border: 1px solid #dce775; }
 
-    /* 日曆與報表 */
     .calendar-ctrl { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
     .calendar-ctrl button { background: none; border: 1px solid #ddd; border-radius: 5px; padding: 2px 10px; cursor: pointer; color: #555; }
     .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; width: 100%; margin-top: 10px; min-height: 100px;}
     .cal-day { aspect-ratio: 1; border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 10px; background: #eee; color: #aaa; position: relative; overflow: hidden; }
     .cal-fill-1 { background: #c8e6c9; color: #2e7d32; } .cal-fill-2 { background: #81c784; color: #1b5e20; } .cal-fill-3 { background: #4caf50; color: #fff; font-weight:bold; }
-    .profile-stats { margin-top: 15px; border-top: 1px dashed #eee; padding-top: 10px; font-size: 12px; line-height: 1.8; color: #555; }
-    .profile-logs { margin-top: 15px; border-top: 1px dashed #eee; padding-top: 10px; font-size: 12px; }
-    .profile-logs h5 { margin: 0 0 10px 0; color: #666; }
 
-    /* 彈窗與載入 */
     #modal-overlay { position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:2000; display:none; justify-content:center; align-items:center; }
     .modal-box { background:#fff; padding:20px; border-radius:15px; width:85%; max-width:320px; max-height:80%; overflow-y:auto; position:relative; }
     .modal-close { position:absolute; top:10px; right:15px; font-size:20px; cursor:pointer; color:#aaa; }
-    
     .log-item { padding: 10px; border-bottom: 1px solid #f0f0f0; display: flex; align-items: flex-start; text-align: left;}
     .log-time { font-size: 10px; color: #999; width: 60px; flex-shrink: 0; margin-top: 2px;}
     .log-content { font-size: 13px; color: #444; flex: 1;}
     .log-tag { font-size: 10px; padding: 2px 4px; border-radius: 4px; background: #eee; margin-right: 5px; color: #666;}
-
     .help-btn { position: absolute; top: 10px; right: 10px; width: 20px; height: 20px; border-radius: 50%; background: #eee; color: #999; font-size: 12px; display: flex; justify-content: center; align-items: center; cursor: pointer; }
     
     #loading { position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(255,255,255,0.8); z-index:3000; display:none; justify-content:center; align-items:center; flex-direction:column;}
     .spinner { width: 30px; height: 30px; border: 4px solid #f3f3f3; border-top: 4px solid var(--primary); border-radius: 50%; animation: spin 1s linear infinite; }
     @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     
-    /* Switch */
     .switch { position: relative; display: inline-block; width: 40px; height: 20px; }
     .switch input { opacity: 0; width: 0; height: 0; }
     .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 20px; }
@@ -175,6 +129,9 @@
     input:checked + .slider { background-color: var(--primary); }
     input:checked + .slider:before { transform: translateX(20px); }
     
+    .profile-stats { margin-top: 15px; border-top: 1px dashed #eee; padding-top: 10px; font-size: 12px; line-height: 1.8; color: #555; }
+    .profile-logs { margin-top: 15px; border-top: 1px dashed #eee; padding-top: 10px; font-size: 12px; }
+    .profile-logs h5 { margin: 0 0 10px 0; color: #666; }
     .admin-row { display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid #eee; font-size:12px; align-items:center;}
     .admin-stat-badges span { padding:2px 5px; border-radius:4px; font-size:10px; margin-left:3px; color:#fff;}
     .member-row { display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid #eee; font-size:12px; }
@@ -292,7 +249,7 @@
 
       <div id="v-profile" class="view-section">
         <div class="card" style="text-align:center;">
-           <div class="help-btn" onclick="alert('這裡設定您的推播偏好。\n關閉即時通知會改為晚上9點收到日報。')">?</div>
+           <div class="help-btn" onclick="alert('設定推播偏好。\n關閉即時通知會改為晚上9點收到日報。')">?</div>
            <div style="font-size:40px;">🧑‍🌾</div>
            <h3 id="p-job">修道志士</h3>
            
@@ -328,11 +285,13 @@
       <div id="v-admin" class="view-section">
          <div class="card">
            <h3>📊 主領班</h3>
+           
            <div style="background:#fff3e0; padding:10px; border-radius:10px; margin-bottom:15px;">
               <div style="font-size:12px; font-weight:bold; margin-bottom:5px;">📢 更新上方跑馬燈</div>
               <input id="adm-marquee" class="input-field" placeholder="輸入公告內容...">
               <button class="btn btn-warn" style="font-size:12px; padding:8px;" onclick="updateMarquee()">更新公告</button>
            </div>
+
            <div style="margin-bottom:15px; display:flex; gap:10px;">
              <select id="adm-mode" class="input-field" onchange="toggleAdmDateInput()" style="flex:1;">
                <option value="all">全部歷史</option>
@@ -342,16 +301,23 @@
              <div id="adm-date-box" style="flex:1; display:none;"><input type="date" id="adm-date" class="input-field"></div>
              <div id="adm-month-box" style="flex:1; display:none;"><input type="month" id="adm-month" class="input-field"></div>
            </div>
+
            <div style="display:flex; gap:5px; margin-bottom:10px;">
              <select id="adm-maj" class="input-field" onchange="admUpdMin()"><option value="全部">全部團隊</option></select>
              <select id="adm-min" class="input-field"><option value="全部">全部公堂</option></select>
            </div>
            <button class="btn btn-primary" onclick="runAdminQuery()">🔍 查詢報表</button>
+           
            <div id="admin-report" class="admin-report-box" style="display:none; margin-top:15px;"></div>
            <div id="admin-list" style="margin-top:10px;"></div>
+           
            <hr style="border:0; border-top:1px dashed #eee; margin:15px 0;">
            <h4>📢 全員廣播</h4>
            <textarea id="broadcast-msg" class="input-field" rows="2" placeholder="內容..."></textarea>
+           <div style="margin-top:5px; font-size:12px; color:#666;">
+             <label>預約發送 (選填)：</label>
+             <input type="datetime-local" id="broadcast-time" class="input-field">
+           </div>
            <button class="btn btn-warn" onclick="sendBroadcast()">發送</button>
          </div>
       </div>
@@ -374,6 +340,34 @@
     var curYear = new Date().getFullYear();
     var curMonth = new Date().getMonth() + 1;
     
+    // 🔴 上線提醒：每分鐘檢查一次 (本地)
+    setInterval(function(){
+      var setTime = localStorage.getItem("reminder_time");
+      if(!setTime) return;
+      
+      var now = new Date();
+      var nowStr = (now.getHours()<10?'0':'') + now.getHours() + ":" + (now.getMinutes()<10?'0':'') + now.getMinutes();
+      
+      // 為避免每秒都跳通知，可以存一個 flag，這裡簡化處理：假設用戶看到通知就會點掉
+      // 更好的做法是記錄 "last_remind_date"
+      var lastRemind = localStorage.getItem("last_remind_date");
+      var today = now.toDateString();
+      
+      if (nowStr === setTime && lastRemind !== today) {
+         localStorage.setItem("last_remind_date", today);
+         // 嘗試發送 Notification (需授權)
+         if(Notification.permission === 'granted') {
+            new Notification("賢德志士", { body: "⏰ 時間到了！記得上線寫下白陽歷史！" });
+         } else if (Notification.permission !== 'denied') {
+            Notification.requestPermission().then(perm => {
+               if(perm === 'granted') new Notification("賢德志士", { body: "⏰ 時間到了！記得上線寫下白陽歷史！" });
+            });
+         } else {
+            alert("⏰ 賢德志士提醒：\n時間到了！記得上線寫下白陽歷史！");
+         }
+      }
+    }, 60000); // 每 60 秒檢查一次
+
     document.addEventListener("visibilitychange", function() {
       if (document.hidden && isTimer) {
         toggleTimer(); 
@@ -391,7 +385,10 @@
         callApi('getConfig').then(cfg => {
             menuConfig = cfg.menu;
             if(cfg.announcement) document.getElementById('marquee-text').innerText = cfg.announcement;
+            
+            // 🔴 修復查詢報表：資料回來後才初始化選單
             initMaj();
+            
             var u = localStorage.getItem("xd_u"), p = localStorage.getItem("xd_p");
             if(u&&p){
                document.getElementById('l-u').value=u; document.getElementById('l-p').value=p;
@@ -401,6 +398,11 @@
         
         var savedTime = localStorage.getItem("reminder_time");
         if(savedTime) document.getElementById('reminder-time').value = savedTime;
+        
+        // 請求通知權限
+        if('Notification' in window && Notification.permission !== 'granted') {
+           Notification.requestPermission();
+        }
     }
 
     function callApi(action, params) {
@@ -416,9 +418,21 @@
 
     // --- UI/UX Functions ---
     function initMaj(){
-      var s=document.getElementById('r-maj'); s.innerHTML="<option disabled selected>選擇團隊</option>";
-      for(var k in menuConfig){ var o=document.createElement('option'); o.value=k; o.innerText=k; s.appendChild(o); }
+      var s=document.getElementById('r-maj'); 
+      // 也要初始化 Admin 的選單
+      var admS = document.getElementById('adm-maj');
+      
+      var opts = "<option disabled selected>選擇團隊</option>";
+      var admOpts = "<option value='全部'>全部團隊</option>";
+      
+      for(var k in menuConfig){ 
+         opts += `<option value="${k}">${k}</option>`;
+         admOpts += `<option value="${k}">${k}</option>`;
+      }
+      s.innerHTML = opts;
+      admS.innerHTML = admOpts;
     }
+    
     function updMinor(){
       var m=document.getElementById('r-maj').value, s=document.getElementById('r-min'); s.innerHTML="";
       if(menuConfig[m]) menuConfig[m].forEach(function(x){ var o=document.createElement('option'); o.value=x; o.innerText=x; s.appendChild(o); });
@@ -573,7 +587,9 @@
     function setLocalReminder() {
        var t = document.getElementById('reminder-time').value;
        localStorage.setItem("reminder_time", t);
-       alert("提醒時間已設定為 " + t);
+       // 請求權限
+       if('Notification' in window) Notification.requestPermission();
+       alert("提醒時間已設定為 " + t + " (請保持網頁在背景執行)");
     }
     
     function changeMonth(delta) {
@@ -679,11 +695,24 @@
        callApi('updateMarquee', {msg:msg}).then(r => { alert(r.msg); document.getElementById('marquee-text').innerText = msg; });
     }
     
-    function loadAdminFilters() { initMaj(); } 
+    function loadAdminFilters() { 
+       // 重用 initMaj 來載入選單，但要確保 menuConfig 已經有資料
+       if(Object.keys(menuConfig).length > 0) {
+          initMaj();
+       } else {
+          // 若還沒載入，這裡只是個保險，其實 onload 已經處理了
+          callApi('getConfig').then(cfg => {
+             menuConfig = cfg.menu;
+             initMaj();
+          });
+       }
+    } 
+    
     function admUpdMin() { 
        var m=document.getElementById('adm-maj').value, s=document.getElementById('adm-min'); s.innerHTML="<option value='全部'>全部公堂</option>";
        if(menuConfig[m]) menuConfig[m].forEach(x => { var o=document.createElement('option'); o.value=x; o.innerText=x; s.appendChild(o); });
     }
+    
     function runAdminQuery() { 
       var filters = {
         major: document.getElementById('adm-maj').value,
@@ -738,9 +767,11 @@
       var msg = document.getElementById('broadcast-msg').value;
       if (!msg) { alert("請輸入訊息內容"); return; }
       
+      var time = document.getElementById('broadcast-time').value;
+      
       if(confirm("確定要發送這則通知給所有人嗎？")) {
         loading(true);
-        callApi('broadcast', {msg: msg, time: null}).then(res => {
+        callApi('broadcast', {msg: msg, time: time}).then(res => {
           loading(false);
           if (res.success) {
             alert("發送成功");
