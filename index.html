@@ -9,7 +9,8 @@
   
   <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
   <script>
-    const APP_VERSION = "20250104-AdminFix-V1"; 
+    // 🔴 版本更新，強制刷新介面
+    const APP_VERSION = "20250104-AdminFix-V3"; 
 
     (function checkUpdate() {
       const savedVersion = localStorage.getItem("app_version");
@@ -35,7 +36,6 @@
         appId: "2c0c1bb1-f413-474e-bc2d-45586547b981", 
         notifyButton: { enable: true },
         allowLocalhostAsSecureOrigin: true,
-        // 若已移至根目錄，這裡不需要 path 設定，若還在 XIANDE 資料夾請保留
         path: "/XIANDE/", 
         serviceWorkerPath: "OneSignalSDKWorker.js",
         serviceWorkerParam: { scope: "/XIANDE/" }
@@ -45,11 +45,12 @@
   </script>
 
   <style>
-    /* CSS 樣式 (保持原本設定) */
+    /* 全域設定 */
     :root { --bg-color: #fdfbf7; --card-bg: #ffffff; --primary: #8bc34a; --accent: #ffb74d; --blue: #81d4fa; --red: #ff8a80; --text: #5d5d5d; --shadow: 0 4px 12px rgba(0,0,0,0.08); }
     * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
     body { font-family: 'Varela Round', sans-serif; background: var(--bg-color); color: var(--text); margin: 0; height: 100vh; display: flex; flex-direction: column; overflow: hidden;}
     
+    /* 導航列：固定底部 */
     .bottom-nav { 
       position: fixed; bottom: 0; left: 0; width: 100%;
       background: #fff; border-top: 1px solid #eee; 
@@ -415,7 +416,7 @@
 
     function loading(x){ document.getElementById('loading').style.display = x?'flex':'none'; }
 
-    // --- 🔴 修復：拆分註冊與管理的下拉選單邏輯 ---
+    // --- UI/UX Functions ---
     function initRegDropdowns(){
       var s=document.getElementById('r-maj'); 
       var opts = "<option disabled selected>選擇團隊</option>";
@@ -594,9 +595,7 @@
     function setLocalReminder() {
        var t = document.getElementById('reminder-time').value;
        localStorage.setItem("reminder_time", t);
-       // 請求權限
-       if('Notification' in window) Notification.requestPermission();
-       alert("提醒時間已設定為 " + t + " (請保持網頁在背景執行)");
+       alert("提醒時間已設定為 " + t);
     }
     
     function changeMonth(delta) {
@@ -703,7 +702,7 @@
     }
     
     function runAdminQuery() { 
-      // 增加防呆：確保資料已載入
+      // 防呆：確保資料已載入
       if(Object.keys(menuConfig).length === 0) { alert("系統資料載入中，請稍後再試..."); return; }
 
       var filters = {
@@ -723,7 +722,13 @@
       loading(true);
       callApi('getAdminReport', {filters:filters, mode:mode, dateVal:dateVal}).then(res => {
         loading(false);
-        if(!res.list) { alert("查詢失敗或無資料"); return; }
+        // 🔴 關鍵修正：當資料為 0 筆時，顯示友善提示，而不是空白
+        if(!res.list || res.list.length === 0) { 
+           document.getElementById('admin-report').style.display = 'block';
+           document.getElementById('admin-report').innerHTML = "<div style='text-align:center; color:#666;'>⚠️ 查無符合條件的資料</div>";
+           document.getElementById('admin-list').innerHTML = "";
+           return; 
+        }
         
         var st = res.stats;
         var repHtml = `
@@ -736,7 +741,6 @@
         document.getElementById('admin-report').style.display = 'block';
 
         var listHtml = "";
-        if(res.list.length == 0) listHtml = "<div style='text-align:center; color:#999;'>無符合資料</div>";
         res.list.forEach(function(u){
            var badges = "";
            if(u.sportCount > 0) badges += `<span style='background:#8bc34a'>運${u.sportCount}</span>`;
