@@ -9,8 +9,8 @@
   
   <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
   <script>
-    // 🔴 版本更新，強制刷新介面
-    const APP_VERSION = "20250104-AdminFix-V4"; 
+    // 🔴 版本更新
+    const APP_VERSION = "20250104-FixCheckbox-V1"; 
 
     (function checkUpdate() {
       const savedVersion = localStorage.getItem("app_version");
@@ -50,7 +50,6 @@
     * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
     body { font-family: 'Varela Round', sans-serif; background: var(--bg-color); color: var(--text); margin: 0; height: 100vh; display: flex; flex-direction: column; overflow: hidden;}
     
-    /* 導航列：固定底部 */
     .bottom-nav { 
       position: fixed; bottom: 0; left: 0; width: 100%;
       background: #fff; border-top: 1px solid #eee; 
@@ -136,6 +135,13 @@
     .admin-row { display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid #eee; font-size:12px; align-items:center;}
     .admin-stat-badges span { padding:2px 5px; border-radius:4px; font-size:10px; margin-left:3px; color:#fff;}
     .member-row { display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid #eee; font-size:12px; }
+
+    /* 🔴 新增：勾選框樣式 */
+    .filter-group { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:10px; }
+    .filter-label { padding: 8px 12px; background: #fff; border: 1px solid #ddd; border-radius: 20px; font-size: 12px; cursor: pointer; color: #666; transition: all 0.2s; user-select: none; display: flex; align-items: center; }
+    .filter-label input { margin-right: 5px; } /* 顯示原生的 checkbox 避免複雜，或用之前的 hidden 方案 */
+    /* 讓勾選狀態更明顯 */
+    .filter-label:has(input:checked) { background: var(--primary); color: #fff; border-color: var(--primary); }
   </style>
 </head>
 <body>
@@ -307,6 +313,15 @@
              <select id="adm-maj" class="input-field" onchange="admUpdMin()"><option value="全部">全部團隊</option></select>
              <select id="adm-min" class="input-field"><option value="全部">全部公堂</option></select>
            </div>
+           
+           <div class="filter-group" style="margin-bottom:15px;">
+             <label class="filter-label"><input type="checkbox" id="f-sport">🏃 運動</label>
+             <label class="filter-label"><input type="checkbox" id="f-read">📖 讀書</label>
+             <label class="filter-label"><input type="checkbox" id="f-spoke">🗣️ 開口</label>
+             <label class="filter-label"><input type="checkbox" id="f-conv">🤝 渡眾</label>
+             <label class="filter-label"><input type="checkbox" id="f-class">🏫 入班</label>
+           </div>
+
            <button class="btn btn-primary" onclick="runAdminQuery()">🔍 查詢報表</button>
            
            <div id="admin-report" class="admin-report-box" style="display:none; margin-top:15px;"></div>
@@ -590,7 +605,9 @@
     function setLocalReminder() {
        var t = document.getElementById('reminder-time').value;
        localStorage.setItem("reminder_time", t);
-       alert("提醒時間已設定為 " + t);
+       // 請求權限
+       if('Notification' in window) Notification.requestPermission();
+       alert("提醒時間已設定為 " + t + " (請保持網頁在背景執行)");
     }
     
     function changeMonth(delta) {
@@ -696,28 +713,6 @@
        callApi('updateMarquee', {msg:msg}).then(r => { alert(r.msg); document.getElementById('marquee-text').innerText = msg; });
     }
     
-    function loadAdminFilters() { 
-       // 重用 initMaj 來載入選單，但要確保 menuConfig 已經有資料
-       if(Object.keys(menuConfig).length > 0) {
-          initMaj();
-       } else {
-          // 若還沒載入，這裡只是個保險，其實 onload 已經處理了
-          callApi('getConfig').then(cfg => {
-             menuConfig = cfg.menu;
-             initMaj();
-          });
-       }
-    } 
-    
-    function admUpdMin() { 
-       var m=document.getElementById('adm-maj').value, s=document.getElementById('adm-min'); 
-       s.innerHTML="<option value='全部'>全部公堂</option>";
-       if(m !== '全部' && menuConfig[m]) {
-          menuConfig[m].forEach(x => { var o=document.createElement('option'); o.value=x; o.innerText=x; s.appendChild(o); });
-       }
-    }
-    
-    // 🔴 關鍵修正：加入 Try-Catch 與錯誤處理
     function runAdminQuery() { 
       try {
         if(Object.keys(menuConfig).length === 0) { alert("系統資料載入中，請稍後再試..."); return; }
