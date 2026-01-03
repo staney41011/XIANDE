@@ -9,43 +9,64 @@
   
   <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
   <script>
-    // 強制版本號，用來清除舊緩存
-    const APP_VERSION = "20250104-2"; 
+    // 🔴🔴🔴 每次更新代碼時，請務必修改這裡的版本號！ 🔴🔴🔴
+    const APP_VERSION = "20250104-V3"; 
+    // 例如下次改版改成 "20250105-V1"，使用者的手機就會自動更新
 
-    // 1. 強制移除所有舊的 Service Worker (避免卡快取)
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.getRegistrations().then(function(registrations) {
-        for(let registration of registrations) {
-          // 如果發現註冊在根目錄 (錯誤的位置)，就移除它
-          if (registration.scope.includes("staney41011.github.io/$")) {
-            console.log('清除舊版 Service Worker:', registration);
-            registration.unregister();
-          }
+    // --- 自動更新機制 (Auto Updater) ---
+    (function checkUpdate() {
+      const savedVersion = localStorage.getItem("app_version");
+      
+      // 如果版本不同，執行強制更新流程
+      if (savedVersion !== APP_VERSION) {
+        console.log(`偵測到新版本: ${APP_VERSION} (舊版: ${savedVersion})，開始更新...`);
+        
+        // 1. 註銷所有 Service Worker (包含 OneSignal 的舊 Worker)
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.getRegistrations().then(function(registrations) {
+            for (let registration of registrations) {
+              registration.unregister();
+            }
+          });
         }
-      });
-    }
 
-    // 2. 初始化 OneSignal
+        // 2. 清除所有快取 (Cache Storage)
+        if ('caches' in window) {
+          caches.keys().then(function(names) {
+            for (let name of names) {
+              caches.delete(name);
+            }
+          });
+        }
+
+        // 3. 更新版本號並重整
+        localStorage.setItem("app_version", APP_VERSION);
+        
+        // 稍微延遲一下讓清除動作完成，然後強制重整
+        setTimeout(() => {
+          alert("系統升級中，將自動重新整理...");
+          window.location.reload(true); 
+        }, 500);
+        return; // 停止執行後續代碼
+      }
+    })();
+
+    // --- OneSignal 初始化 ---
     window.OneSignalDeferred = window.OneSignalDeferred || [];
     OneSignalDeferred.push(function(OneSignal) {
       OneSignal.init({
         appId: "2c0c1bb1-f413-474e-bc2d-45586547b981", 
         notifyButton: { enable: true },
         allowLocalhostAsSecureOrigin: true,
-        // 若已移至根目錄專案，這裡不需要 path
-        // 若還在 XIANDE 資料夾，請保留
-        path: "/XIANDE/", 
+        // 若在根目錄專案，這裡通常不需要 path，但若有問題可加回
         serviceWorkerPath: "OneSignalSDKWorker.js",
-        serviceWorkerParam: { scope: "/XIANDE/" }
       });
-      
-      // 預設給予 "instant" 標籤 (即時通知)
       OneSignal.User.addTag("notify", "instant");
     });
   </script>
 
   <style>
-    /* CSS 樣式 */
+    /* CSS 樣式 (保持不變) */
     :root { --bg-color: #fdfbf7; --card-bg: #ffffff; --primary: #8bc34a; --accent: #ffb74d; --blue: #81d4fa; --red: #ff8a80; --text: #5d5d5d; --shadow: 0 4px 12px rgba(0,0,0,0.08); }
     * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
     body { font-family: 'Varela Round', sans-serif; background: var(--bg-color); color: var(--text); margin: 0; height: 100vh; display: flex; flex-direction: column; overflow: hidden;}
@@ -69,7 +90,6 @@
     .marquee-text { display: inline-block; padding-left: 100%; animation: scroll 15s linear infinite; }
     @keyframes scroll { 0% { transform: translateX(0); } 100% { transform: translateX(-100%); } }
     
-    /* 底部導航列優化 */
     .bottom-nav { 
       background: #fff; padding: 8px 0; display: flex; justify-content: space-around; border-top: 1px solid #eee; 
       padding-bottom: env(safe-area-inset-bottom); 
@@ -79,7 +99,6 @@
     .nav-btn.active { color: var(--primary); transform: scale(1.1); transition: 0.2s;}
     .nav-icon { font-size: 20px; display: block; margin-bottom: 2px; }
 
-    /* 果樹樣式 (修復果實顯示) */
     .orchard-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 20px; width: 100%; padding-bottom: 20px;}
     .tree-container { text-align: center; margin-bottom: 10px; cursor: pointer; transition: transform 0.1s; position: relative;}
     .tree-container:active { transform: scale(0.95); }
@@ -90,13 +109,11 @@
     .tree-scale-l .tree-canopy { width: 160px; min-height: 120px; } .tree-scale-l .tree-trunk { width: 25px; height: 40px; }
     .tree-label { background: #fff; border: 1px solid #eee; padding: 4px 8px; border-radius: 8px; font-size: 12px; margin-top: 5px; display: inline-block; font-weight: bold; color: #333; box-shadow: 0 2px 5px rgba(0,0,0,0.05); line-height: 1.4; min-width: 90px; }
     
-    /* 果實樣式 */
     .fruit { width: 12px; height: 12px; border-radius: 50%; margin: 2px; box-shadow: 1px 1px 2px rgba(0,0,0,0.2); flex-shrink: 0;}
     .fruit.red { background: var(--red); } 
     .fruit.gold { background: #ffd700; } 
     .fruit.blue { background: #29b6f6; } 
 
-    /* 修煉頁面新樣式 */
     .achieve-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; font-size: 14px;}
     .achieve-input-group { display: flex; align-items: center; gap: 5px; }
     .achieve-input { width: 50px; text-align: center; border: 2px solid #eee; border-radius: 8px; padding: 5px; font-weight: bold; color: var(--text);}
@@ -104,14 +121,12 @@
     .btn-plus:active { background: #ddd; transform: scale(0.9); }
     .today-dashboard { background: #f0f4c3; padding: 10px; border-radius: 10px; margin-top: 10px; font-size: 12px; color: #555; text-align: center; border: 1px solid #dce775; }
 
-    /* 日曆樣式 (修復) */
     .calendar-ctrl { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
     .calendar-ctrl button { background: none; border: 1px solid #ddd; border-radius: 5px; padding: 2px 10px; cursor: pointer; color: #555; }
     .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; width: 100%; margin-top: 10px; }
     .cal-day { aspect-ratio: 1; border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 10px; background: #eee; color: #aaa; position: relative; overflow: hidden; }
     .cal-fill-1 { background: #c8e6c9; color: #2e7d32; } .cal-fill-2 { background: #81c784; color: #1b5e20; } .cal-fill-3 { background: #4caf50; color: #fff; font-weight:bold; }
 
-    /* Log & Modal */
     #modal-overlay { position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:2000; display:none; justify-content:center; align-items:center; }
     .modal-box { background:#fff; padding:20px; border-radius:15px; width:85%; max-width:320px; max-height:80%; overflow-y:auto; position:relative; }
     .modal-close { position:absolute; top:10px; right:15px; font-size:20px; cursor:pointer; color:#aaa; }
@@ -126,7 +141,6 @@
     .spinner { width: 30px; height: 30px; border: 4px solid #f3f3f3; border-top: 4px solid var(--primary); border-radius: 50%; animation: spin 1s linear infinite; }
     @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     
-    /* Switch */
     .switch { position: relative; display: inline-block; width: 40px; height: 20px; }
     .switch input { opacity: 0; width: 0; height: 0; }
     .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 20px; }
@@ -137,6 +151,10 @@
     .profile-stats { margin-top: 15px; border-top: 1px dashed #eee; padding-top: 10px; font-size: 12px; line-height: 1.8; color: #555; }
     .profile-logs { margin-top: 15px; border-top: 1px dashed #eee; padding-top: 10px; font-size: 12px; }
     .profile-logs h5 { margin: 0 0 10px 0; color: #666; }
+    .member-row { display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid #eee; font-size:12px; }
+    
+    /* 修正日曆內容消失問題 */
+    #calendar-area { min-height: 100px; }
   </style>
 </head>
 <body>
@@ -328,7 +346,7 @@
   </div>
 
   <script>
-    const API_URL = "https://script.google.com/macros/s/AKfycbxHe88NVoiJkAt2pvBnCYUk_xGul1FhXTAj0kyAXA9GEIddXB1AD8j4gtjhbDEASPSr/exec"; // 請確認此 URL 正確
+    const API_URL = "https://script.google.com/macros/s/AKfycbxHe88NVoiJkAt2pvBnCYUk_xGul1FhXTAj0kyAXA9GEIddXB1AD8j4gtjhbDEASPSr/exec";
 
     var gUser=null, gPass=null, gData={}, menuConfig={};
     var timerInt=null, isTimer=false, lastLogTime=0;
@@ -541,7 +559,6 @@
       document.getElementById('profile-log-list').innerHTML = "";
 
       callApi('getCalendarData', {u:gUser, year:curYear, month:curMonth}).then(res => {
-        // --- 修復日曆渲染邏輯 ---
         var daysInMonth = new Date(curYear, curMonth, 0).getDate();
         var html = "";
         for(var d=1; d<=daysInMonth; d++) {
@@ -579,7 +596,7 @@
         var html = "";
         for(var key in data){
           var h = data[key];
-          // --- 修復果實生成邏輯 ---
+          
           var fruits = "";
           var sp = Number(h.spoke)||0;
           var cv = Number(h.convert)||0;
