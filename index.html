@@ -9,7 +9,7 @@
   
   <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
   <script>
-    const APP_VERSION = "20250104-FixBugs-V1"; 
+    const APP_VERSION = "20250104-AdminFix-V1"; 
 
     (function checkUpdate() {
       const savedVersion = localStorage.getItem("app_version");
@@ -35,7 +35,7 @@
         appId: "2c0c1bb1-f413-474e-bc2d-45586547b981", 
         notifyButton: { enable: true },
         allowLocalhostAsSecureOrigin: true,
-        // 若在根目錄，移除 path；若在 XIANDE 資料夾，保留 path
+        // 若已移至根目錄，這裡不需要 path 設定，若還在 XIANDE 資料夾請保留
         path: "/XIANDE/", 
         serviceWorkerPath: "OneSignalSDKWorker.js",
         serviceWorkerParam: { scope: "/XIANDE/" }
@@ -45,11 +45,11 @@
   </script>
 
   <style>
+    /* CSS 樣式 (保持原本設定) */
     :root { --bg-color: #fdfbf7; --card-bg: #ffffff; --primary: #8bc34a; --accent: #ffb74d; --blue: #81d4fa; --red: #ff8a80; --text: #5d5d5d; --shadow: 0 4px 12px rgba(0,0,0,0.08); }
     * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
     body { font-family: 'Varela Round', sans-serif; background: var(--bg-color); color: var(--text); margin: 0; height: 100vh; display: flex; flex-direction: column; overflow: hidden;}
     
-    /* 導航列：固定底部 */
     .bottom-nav { 
       position: fixed; bottom: 0; left: 0; width: 100%;
       background: #fff; border-top: 1px solid #eee; 
@@ -249,7 +249,7 @@
 
       <div id="v-profile" class="view-section">
         <div class="card" style="text-align:center;">
-           <div class="help-btn" onclick="alert('設定推播偏好。\n關閉即時通知會改為晚上9點收到日報。')">?</div>
+           <div class="help-btn" onclick="alert('這裡設定您的推播偏好。\n關閉即時通知會改為晚上9點收到日報。')">?</div>
            <div style="font-size:40px;">🧑‍🌾</div>
            <h3 id="p-job">修道志士</h3>
            
@@ -321,6 +321,7 @@
            <button class="btn btn-warn" onclick="sendBroadcast()">發送</button>
          </div>
       </div>
+
     </div>
 
     <div class="bottom-nav">
@@ -348,8 +349,6 @@
       var now = new Date();
       var nowStr = (now.getHours()<10?'0':'') + now.getHours() + ":" + (now.getMinutes()<10?'0':'') + now.getMinutes();
       
-      // 為避免每秒都跳通知，可以存一個 flag，這裡簡化處理：假設用戶看到通知就會點掉
-      // 更好的做法是記錄 "last_remind_date"
       var lastRemind = localStorage.getItem("last_remind_date");
       var today = now.toDateString();
       
@@ -366,7 +365,7 @@
             alert("⏰ 賢德志士提醒：\n時間到了！記得上線寫下白陽歷史！");
          }
       }
-    }, 60000); // 每 60 秒檢查一次
+    }, 60000); 
 
     document.addEventListener("visibilitychange", function() {
       if (document.hidden && isTimer) {
@@ -386,8 +385,9 @@
             menuConfig = cfg.menu;
             if(cfg.announcement) document.getElementById('marquee-text').innerText = cfg.announcement;
             
-            // 🔴 修復查詢報表：資料回來後才初始化選單
-            initMaj();
+            // 🔴 分別初始化
+            initRegDropdowns();
+            initAdminDropdowns();
             
             var u = localStorage.getItem("xd_u"), p = localStorage.getItem("xd_p");
             if(u&&p){
@@ -399,7 +399,6 @@
         var savedTime = localStorage.getItem("reminder_time");
         if(savedTime) document.getElementById('reminder-time').value = savedTime;
         
-        // 請求通知權限
         if('Notification' in window && Notification.permission !== 'granted') {
            Notification.requestPermission();
         }
@@ -416,27 +415,35 @@
 
     function loading(x){ document.getElementById('loading').style.display = x?'flex':'none'; }
 
-    // --- UI/UX Functions ---
-    function initMaj(){
+    // --- 🔴 修復：拆分註冊與管理的下拉選單邏輯 ---
+    function initRegDropdowns(){
       var s=document.getElementById('r-maj'); 
-      // 也要初始化 Admin 的選單
-      var admS = document.getElementById('adm-maj');
-      
       var opts = "<option disabled selected>選擇團隊</option>";
-      var admOpts = "<option value='全部'>全部團隊</option>";
-      
-      for(var k in menuConfig){ 
-         opts += `<option value="${k}">${k}</option>`;
-         admOpts += `<option value="${k}">${k}</option>`;
-      }
+      for(var k in menuConfig){ opts += `<option value="${k}">${k}</option>`; }
       s.innerHTML = opts;
-      admS.innerHTML = admOpts;
+    }
+    
+    function initAdminDropdowns(){
+      var s=document.getElementById('adm-maj');
+      var opts = "<option value='全部'>全部團隊</option>";
+      for(var k in menuConfig){ opts += `<option value="${k}">${k}</option>`; }
+      s.innerHTML = opts;
+      admUpdMin(); // 順便初始化公堂
     }
     
     function updMinor(){
       var m=document.getElementById('r-maj').value, s=document.getElementById('r-min'); s.innerHTML="";
       if(menuConfig[m]) menuConfig[m].forEach(function(x){ var o=document.createElement('option'); o.value=x; o.innerText=x; s.appendChild(o); });
     }
+    
+    function admUpdMin() { 
+       var m=document.getElementById('adm-maj').value, s=document.getElementById('adm-min'); 
+       s.innerHTML="<option value='全部'>全部公堂</option>";
+       if(m !== '全部' && menuConfig[m]) {
+          menuConfig[m].forEach(x => { var o=document.createElement('option'); o.value=x; o.innerText=x; s.appendChild(o); });
+       }
+    }
+
     function toggleAuth(t){
       document.getElementById('f-login').style.display=t=='login'?'block':'none';
       document.getElementById('f-reg').style.display=t=='register'?'block':'none';
@@ -695,25 +702,10 @@
        callApi('updateMarquee', {msg:msg}).then(r => { alert(r.msg); document.getElementById('marquee-text').innerText = msg; });
     }
     
-    function loadAdminFilters() { 
-       // 重用 initMaj 來載入選單，但要確保 menuConfig 已經有資料
-       if(Object.keys(menuConfig).length > 0) {
-          initMaj();
-       } else {
-          // 若還沒載入，這裡只是個保險，其實 onload 已經處理了
-          callApi('getConfig').then(cfg => {
-             menuConfig = cfg.menu;
-             initMaj();
-          });
-       }
-    } 
-    
-    function admUpdMin() { 
-       var m=document.getElementById('adm-maj').value, s=document.getElementById('adm-min'); s.innerHTML="<option value='全部'>全部公堂</option>";
-       if(menuConfig[m]) menuConfig[m].forEach(x => { var o=document.createElement('option'); o.value=x; o.innerText=x; s.appendChild(o); });
-    }
-    
     function runAdminQuery() { 
+      // 增加防呆：確保資料已載入
+      if(Object.keys(menuConfig).length === 0) { alert("系統資料載入中，請稍後再試..."); return; }
+
       var filters = {
         major: document.getElementById('adm-maj').value,
         minor: document.getElementById('adm-min').value,
@@ -731,6 +723,8 @@
       loading(true);
       callApi('getAdminReport', {filters:filters, mode:mode, dateVal:dateVal}).then(res => {
         loading(false);
+        if(!res.list) { alert("查詢失敗或無資料"); return; }
+        
         var st = res.stats;
         var repHtml = `
           <div><b>[${mode === 'all' ? '全部歷史' : dateVal}]</b></div>
@@ -766,7 +760,6 @@
     function sendBroadcast() { 
       var msg = document.getElementById('broadcast-msg').value;
       if (!msg) { alert("請輸入訊息內容"); return; }
-      
       var time = document.getElementById('broadcast-time').value;
       
       if(confirm("確定要發送這則通知給所有人嗎？")) {
