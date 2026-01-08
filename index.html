@@ -9,7 +9,7 @@
   
   <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
   <script>
-    const APP_VERSION = "20260108-Calendar-Final"; 
+    const APP_VERSION = "20260108-OrchardDash-V1"; 
 
     (function checkUpdate() {
       const savedVersion = localStorage.getItem("app_version");
@@ -35,7 +35,7 @@
   </script>
 
   <style>
-    /* CSS 樣式 */
+    /* 全域設定 */
     :root { --bg-color: #fdfbf7; --card-bg: #ffffff; --primary: #8bc34a; --accent: #ffb74d; --blue: #81d4fa; --red: #ff8a80; --text: #5d5d5d; --shadow: 0 4px 12px rgba(0,0,0,0.08); }
     * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
     body { font-family: 'Varela Round', sans-serif; background: var(--bg-color); color: var(--text); margin: 0; height: 100vh; display: flex; flex-direction: column; overflow: hidden;}
@@ -59,6 +59,12 @@
     .marquee-container { background: #d32f2f; color: #fff; font-size: 12px; white-space: nowrap; overflow: hidden; border-radius: 4px; padding: 2px 0; width: 100%; }
     .marquee-text { display: inline-block; padding-left: 100%; animation: scroll 15s linear infinite; }
     @keyframes scroll { 0% { transform: translateX(0); } 100% { transform: translateX(-100%); } }
+    
+    /* 果園與儀表板 */
+    .orchard-dashboard { display: flex; justify-content: space-around; background: linear-gradient(135deg, #81c784, #4caf50); color: white; padding: 15px; border-radius: 15px; margin-bottom: 20px; box-shadow: 0 4px 10px rgba(76, 175, 80, 0.3); width: 100%; }
+    .dash-item { text-align: center; }
+    .dash-num { font-size: 24px; font-weight: bold; display: block; }
+    .dash-label { font-size: 11px; opacity: 0.9; }
     .orchard-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 20px; width: 100%; padding-bottom: 20px;}
     .tree-container { text-align: center; margin-bottom: 10px; cursor: pointer; transition: transform 0.1s; position: relative;}
     .tree-container:active { transform: scale(0.95); }
@@ -70,6 +76,7 @@
     .tree-label { background: #fff; border: 1px solid #eee; padding: 4px 8px; border-radius: 8px; font-size: 12px; margin-top: 5px; display: inline-block; font-weight: bold; color: #333; box-shadow: 0 2px 5px rgba(0,0,0,0.05); line-height: 1.4; min-width: 90px; }
     .fruit { width: 12px; height: 12px; border-radius: 50%; margin: 2px; box-shadow: 1px 1px 2px rgba(0,0,0,0.2); flex-shrink: 0;}
     .fruit.red { background: var(--red); } .fruit.gold { background: #ffd700; } .fruit.blue { background: #29b6f6; } 
+    
     .achieve-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; font-size: 14px;}
     .achieve-input-group { display: flex; align-items: center; gap: 8px; }
     .achieve-input { width: 50px; text-align: center; border: 2px solid #eee; border-radius: 8px; padding: 5px; font-weight: bold; color: var(--text); background:#fafafa;}
@@ -94,6 +101,12 @@
     #loading { position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(255,255,255,0.8); z-index:3000; display:none; justify-content:center; align-items:center; flex-direction:column;}
     .spinner { width: 30px; height: 30px; border: 4px solid #f3f3f3; border-top: 4px solid var(--primary); border-radius: 50%; animation: spin 1s linear infinite; }
     @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    .switch { position: relative; display: inline-block; width: 40px; height: 20px; }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 20px; }
+    .slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 2px; bottom: 2px; background-color: white; transition: .4s; border-radius: 50%; }
+    input:checked + .slider { background-color: var(--primary); }
+    input:checked + .slider:before { transform: translateX(20px); }
     .profile-stats { margin-top: 15px; border-top: 1px dashed #eee; padding-top: 10px; font-size: 12px; line-height: 1.8; color: #555; }
     .profile-logs { margin-top: 15px; border-top: 1px dashed #eee; padding-top: 10px; font-size: 12px; }
     .profile-logs h5 { margin: 0 0 10px 0; color: #666; }
@@ -119,10 +132,10 @@
     .crm-note { font-size: 12px; color: #888; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .fab { position: fixed; bottom: 80px; right: 20px; width: 50px; height: 50px; background: var(--accent); color: #fff; border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 24px; box-shadow: 0 4px 10px rgba(0,0,0,0.2); cursor: pointer; z-index: 500; }
     
-    /* 🔴 行事曆樣式 */
+    /* 行事曆樣式 */
     .scroll-x { display: flex; overflow-x: auto; white-space: nowrap; padding-bottom: 10px; gap: 8px; }
-    .chip { padding: 6px 12px; border-radius: 16px; background: #eee; color: #666; font-size: 12px; cursor: pointer; transition: 0.2s; }
-    .chip.active { background: var(--primary); color: #fff; font-weight: bold; }
+    .chip { padding: 6px 12px; border-radius: 16px; background: #eee; color: #666; font-size: 12px; cursor: pointer; transition: 0.2s; border: 1px solid #ddd; }
+    .chip.active { background: var(--primary); color: #fff; font-weight: bold; border-color: var(--primary); }
     
     .event-card { display: flex; background: #fff; margin-bottom: 10px; border-radius: 10px; overflow: hidden; box-shadow: 0 2px 5px rgba(0,0,0,0.05); border-left: 5px solid #ccc; transition: all 0.2s;}
     .event-card.past { opacity: 0.6; filter: grayscale(80%); }
@@ -132,6 +145,7 @@
     .event-month { font-size: 10px; color: #888; }
     .event-info { padding: 10px; flex: 1; }
     .event-title { font-weight: bold; font-size: 14px; color: #333; margin-bottom: 4px; }
+    .event-note { font-size: 12px; color: #666; margin-bottom: 6px; border-left: 2px solid #eee; padding-left: 5px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
     .event-meta { font-size: 11px; color: #777; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
     .tag { font-size: 9px; padding: 2px 6px; border-radius: 4px; color: #fff; background: #999; }
     .tag.仙佛紀念日 { background: #fbc02d; }
@@ -201,8 +215,20 @@
       </div>
 
       <div id="v-orchard" class="view-section" style="text-align:center;">
-        <button class="btn btn-primary" style="margin-bottom:20px; font-size:12px; padding:8px; width:auto;" onclick="loadOrchard()">🔄 更新果園</button>
+        <button class="btn btn-primary" style="margin-bottom:15px; font-size:12px; padding:8px; width:auto;" onclick="loadOrchard()">🔄 更新果園數據</button>
+        
+        <div id="orchard-dash" class="orchard-dashboard">
+           <div class="dash-item"><span id="dash-spoke" class="dash-num">0</span><span class="dash-label">總開口</span></div>
+           <div class="dash-item"><span id="dash-conv" class="dash-num">0</span><span class="dash-label">總渡眾</span></div>
+           <div class="dash-item"><span id="dash-class" class="dash-num">0</span><span class="dash-label">總入班</span></div>
+        </div>
+
         <div id="orchard-container" class="orchard-grid"></div>
+        
+        <div style="margin-top:20px; border-top:1px dashed #ccc; padding-top:10px;">
+           <h4 style="color:#666;">📜 最新動態</h4>
+           <div id="log-container" class="card" style="padding:0; overflow:hidden; width:100%; border:none; box-shadow:none; background:transparent;"></div>
+        </div>
       </div>
 
       <div id="v-crm" class="view-section">
@@ -225,11 +251,6 @@
                <div style="text-align:center; padding:20px; color:#ccc;">載入中...</div>
             </div>
          </div>
-      </div>
-
-      <div id="v-logs" class="view-section">
-        <div style="text-align:center; margin-bottom:10px;"><button class="btn btn-primary" style="padding:8px; font-size:12px; width:auto;" onclick="loadGlobalLogs()">🔄 更新動態</button></div>
-        <div id="log-container" class="card" style="padding:0; overflow:hidden; width:100%;"></div>
       </div>
 
       <div id="v-profile" class="view-section">
@@ -286,7 +307,6 @@
       <button class="nav-btn" onclick="nav('orchard'); loadOrchard()" id="n-orchard"><span class="nav-icon">🍎</span>果園</button>
       <button class="nav-btn" onclick="nav('crm'); loadCRM()" id="n-crm"><span class="nav-icon">📒</span>記事</button>
       <button class="nav-btn" onclick="nav('events'); loadEvents()" id="n-events"><span class="nav-icon">📅</span>活動</button>
-      <button class="nav-btn" onclick="nav('logs'); loadGlobalLogs()" id="n-logs"><span class="nav-icon">📜</span>歷程</button>
       <button class="nav-btn" onclick="nav('profile'); loadCalendar()" id="n-profile"><span class="nav-icon">👤</span>我的</button>
       <button class="nav-btn" onclick="nav('admin'); loadAdminFilters()" id="n-admin" style="display:none;"><span class="nav-icon">🛡️</span>主領班</button>
     </div>
@@ -295,11 +315,11 @@
   <script>
     const API_URL = "https://script.google.com/macros/s/AKfycbxHe88NVoiJkAt2pvBnCYUk_xGul1FhXTAj0kyAXA9GEIddXB1AD8j4gtjhbDEASPSr/exec";
     var gUser=null, gPass=null, gData={}, menuConfig={}, crmData=[];
-    var allEvents = []; // 儲存所有活動資料
+    var allEvents = [];
+    var activeFilters = []; // 🔴 儲存複選的篩選條件
     var timerInt=null, isTimer=false;
     var curYear = new Date().getFullYear(), curMonth = new Date().getMonth() + 1;
 
-    // 上線提醒
     setInterval(function(){
       var setTime = localStorage.getItem("reminder_time");
       if(!setTime) return;
@@ -311,7 +331,6 @@
          localStorage.setItem("last_remind_date", today);
          if(Notification.permission === 'granted') new Notification("賢德志士", { body: "⏰ 時間到了！記得上線寫下白陽歷史！" });
          else if (Notification.permission !== 'denied') Notification.requestPermission().then(p => { if(p === 'granted') new Notification("賢德志士", { body: "⏰ 時間到了！" }); });
-         else alert("⏰ 賢德志士提醒：\n時間到了！記得上線寫下白陽歷史！");
       }
     }, 60000); 
 
@@ -343,7 +362,7 @@
     }
     function loading(x){ document.getElementById('loading').style.display = x?'flex':'none'; }
 
-    // 🔴 Events Logic (Final)
+    // 🔴 Events Logic (Multi-select)
     function loadEvents() {
        document.getElementById('event-list').innerHTML = '<div style="text-align:center; padding:20px; color:#ccc;">載入中...</div>';
        callApi('getYearlyEvents').then(res => {
@@ -352,56 +371,95 @@
           allEvents = res.list || [];
           var cats = res.cats || [];
           
-          // 渲染篩選器
-          var filterHtml = `<div class="chip active" onclick="filterEvents('all', this)">全部</div>`;
-          cats.forEach(c => { filterHtml += `<div class="chip" onclick="filterEvents('${c}', this)">${c}</div>`; });
+          // 初始化篩選器
+          initFilters();
+
+          // 渲染篩選按鈕
+          var filterHtml = `<div class="chip ${activeFilters.length===0?'active':''}" onclick="toggleFilter('all', this)">全部</div>`;
+          cats.forEach(c => { 
+             var isActive = activeFilters.includes(c) ? 'active' : '';
+             filterHtml += `<div class="chip ${isActive}" onclick="toggleFilter('${c}', this)">${c}</div>`; 
+          });
           document.getElementById('event-filters').innerHTML = filterHtml;
           
-          renderEventList('all');
+          renderEventList();
        });
     }
     
-    function filterEvents(cat, el) {
-       document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
-       el.classList.add('active');
-       renderEventList(cat);
+    function initFilters() {
+       // 如果是主領班 -> 預設全選 (activeFilters = [])
+       if(gData.teamMajor === "主領班") {
+          activeFilters = [];
+       } else {
+          // 一般志士 -> 預設 中央 + 賢德
+          activeFilters = ["中央", "賢德"];
+          // 自動加入所屬團隊 (中賢/北賢/南賢)
+          if(gData.teamMajor && gData.teamMajor.includes("賢")) {
+             activeFilters.push(gData.teamMajor);
+          }
+       }
     }
     
-    function renderEventList(filterCat) {
+    function toggleFilter(cat, el) {
+       if(cat === 'all') {
+          activeFilters = []; // 清空代表全選
+          // 重繪按鈕樣式
+          var chips = document.querySelectorAll('.chip');
+          chips.forEach(c => c.classList.remove('active'));
+          el.classList.add('active');
+       } else {
+          // 取消「全部」的樣式
+          document.querySelector('.chip:first-child').classList.remove('active');
+          
+          if(activeFilters.includes(cat)) {
+             // 移除
+             activeFilters = activeFilters.filter(c => c !== cat);
+             el.classList.remove('active');
+          } else {
+             // 加入
+             activeFilters.push(cat);
+             el.classList.add('active');
+          }
+       }
+       renderEventList();
+    }
+    
+    function renderEventList() {
        var today = new Date(); today.setHours(0,0,0,0);
        var html = "";
        var hasScrolled = false;
        var historyAdded = false;
        
        allEvents.forEach((e, index) => {
-          // 篩選邏輯
-          if(filterCat !== 'all' && e.cat !== filterCat) return;
+          // 🔴 複選篩選邏輯：如果 activeFilters 不為空，且該活動分類不在其中 -> 跳過
+          if(activeFilters.length > 0 && !activeFilters.includes(e.cat)) return;
           
           var dStart = new Date(e.date);
           var dEnd = new Date(e.end);
           var isPast = dEnd < today;
           var isTodayOrFuture = dEnd >= today;
           
-          // 插入歷史分隔線 (只插一次，且只在全顯示模式下)
-          if(filterCat === 'all' && !historyAdded && isTodayOrFuture && index > 0) {
+          // 歷史分隔線 (只在「全部顯示」或「篩選後第一筆未來活動」前顯示)
+          if(!historyAdded && isTodayOrFuture && index > 0) {
              html += `<div class="history-line">以上是歷史活動</div>`;
              historyAdded = true;
           }
           
-          // 計算顯示日期
           var day = dStart.getDate();
           var mon = dStart.getMonth() + 1;
           var dateRangeStr = "";
           
-          // 多日判斷
           if(e.date !== e.end) {
-             // 格式: 1/10 ~ 1/12
              var dEndDay = dEnd.getDate();
              var dEndMon = dEnd.getMonth() + 1;
              dateRangeStr = `📅 ${mon}/${day} ~ ${dEndMon}/${dEndDay}`;
-             day = `${day}-${dEndDay}`; // 左側顯示範圍
+             day = `${day}-${dEndDay}`; 
+             // 跨日活動：倒數仍依據起始日
+             var diffTime = dStart - today;
+             var diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+             if(diffDays > 0) dateRangeStr += ` (還有${diffDays}天)`;
+             else if(diffDays <= 0 && dEnd >= today) dateRangeStr += ` (進行中)`;
           } else {
-             // 單日
              var diffTime = dStart - today;
              var diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
              if(diffDays === 0) dateRangeStr = "<span style='color:red; font-weight:bold;'>今天!</span>";
@@ -409,21 +467,24 @@
              else dateRangeStr = "已結束";
           }
 
-          // 自動定位 ID
           var cardId = "";
           if(!hasScrolled && isTodayOrFuture) {
              cardId = "id='today-focus'";
              hasScrolled = true;
           }
           
+          // 🔴 備註直接顯示
+          var noteHtml = e.note ? `<div class="event-note">${e.note}</div>` : "";
+          
           html += `
-          <div ${cardId} class="event-card ${isPast?'past':''} ${cardId?'focus':''}" onclick="alert('${e.note || "無詳細內容"}')">
+          <div ${cardId} class="event-card ${isPast?'past':''} ${cardId?'focus':''}">
              <div class="event-date-box" style="border-left: 5px solid ${getTagColor(e.cat)}">
                 <div class="event-month">${mon}月</div>
                 <div class="event-day" style="font-size:${day.toString().length>2?'14px':'18px'}">${day}</div>
              </div>
              <div class="event-info">
                 <div class="event-title">${e.name}</div>
+                ${noteHtml}
                 <div class="event-meta">
                    <span class="tag" style="background:${getTagColor(e.cat)}">${e.cat}</span>
                    <span>📍 ${e.loc || "--"}</span>
@@ -435,7 +496,6 @@
        
        document.getElementById('event-list').innerHTML = html || "<div style='text-align:center; color:#999; padding:20px;'>沒有活動</div>";
        
-       // 自動捲動
        setTimeout(() => {
           var focusEl = document.getElementById('today-focus');
           if(focusEl) focusEl.scrollIntoView({behavior: "smooth", block: "center"});
@@ -510,7 +570,6 @@
             </select>
          </div>
          <div style="margin-bottom:10px;"><label>下一步 / 待辦</label><input id="e-todo" class="input-field" value="${item.todo}" placeholder="例如：約吃飯、送書"></div>
-         
          <div style="margin-bottom:10px; background:#f0f4c3; padding:10px; border-radius:10px;">
             <label>⏰ 設定提醒 (選填)</label>
             <input id="e-remind" type="datetime-local" class="input-field" value="${item.remind}">
@@ -522,12 +581,10 @@
                <option value="monthly" ${item.repeat=='monthly'?'selected':''}>每月</option>
             </select>
          </div>
-
          <div style="margin-bottom:15px;"><label>備註</label><textarea id="e-note" class="input-field" rows="3">${item.note}</textarea></div>
          <button class="btn btn-primary" onclick="saveCRMItem()">💾 儲存</button>
          ${!isNew ? `<button class="btn" style="background:#eee; color:#f44336; margin-top:10px;" onclick="deleteCRMItem(${item.id})">🗑️ 刪除</button>` : ''}
        `;
-       
        document.getElementById('modal-title').innerText = title;
        document.getElementById('modal-content').innerHTML = html;
        document.getElementById('modal-overlay').style.display = 'flex';
@@ -535,13 +592,8 @@
 
     function saveCRMItem() {
        var item = { 
-          id: document.getElementById('e-id').value, 
-          name: document.getElementById('e-name').value, 
-          status: document.getElementById('e-status').value, 
-          todo: document.getElementById('e-todo').value, 
-          note: document.getElementById('e-note').value,
-          remind: document.getElementById('e-remind').value,
-          repeat: document.getElementById('e-repeat').value
+          id: document.getElementById('e-id').value, name: document.getElementById('e-name').value, status: document.getElementById('e-status').value, 
+          todo: document.getElementById('e-todo').value, note: document.getElementById('e-note').value, remind: document.getElementById('e-remind').value, repeat: document.getElementById('e-repeat').value
        };
        if(!item.name) { alert("請輸入姓名"); return; }
        loading(true);
@@ -567,13 +619,13 @@
        loadCRM(userName);
     }
 
-    // --- Core UI Functions ---
+    // Core Functions
     function initRegDropdowns(){ var s=document.getElementById('r-maj'), opts="<option disabled selected>選擇團隊</option>"; for(var k in menuConfig){ opts += `<option value="${k}">${k}</option>`; } s.innerHTML = opts; }
     function initAdminDropdowns(){ var s=document.getElementById('adm-maj'), opts="<option value='全部'>全部團隊</option>"; for(var k in menuConfig){ opts += `<option value="${k}">${k}</option>`; } s.innerHTML = opts; admUpdMin(); }
     function updMinor(){ var m=document.getElementById('r-maj').value, s=document.getElementById('r-min'); s.innerHTML=""; if(menuConfig[m]) menuConfig[m].forEach(x => { var o=document.createElement('option'); o.value=x; o.innerText=x; s.appendChild(o); }); }
     function admUpdMin(){ var m=document.getElementById('adm-maj').value, s=document.getElementById('adm-min'); s.innerHTML="<option value='全部'>全部公堂</option>"; if(m !== '全部' && menuConfig[m]) { menuConfig[m].forEach(x => { var o=document.createElement('option'); o.value=x; o.innerText=x; s.appendChild(o); }); } }
     function toggleAuth(t){ document.getElementById('f-login').style.display=t=='login'?'block':'none'; document.getElementById('f-reg').style.display=t=='register'?'block':'none'; }
-    function nav(t){ ['home','orchard','logs','profile','admin','crm','events'].forEach(x=>{ document.getElementById('v-'+x).classList.remove('active'); document.getElementById('n-'+x).classList.remove('active'); }); document.getElementById('v-'+t).classList.add('active'); document.getElementById('n-'+t).classList.add('active'); }
+    function nav(t){ ['home','orchard','profile','admin','crm','events'].forEach(x=>{ document.getElementById('v-'+x).classList.remove('active'); document.getElementById('n-'+x).classList.remove('active'); }); document.getElementById('v-'+t).classList.add('active'); document.getElementById('n-'+t).classList.add('active'); }
     function closeModal() { document.getElementById('modal-overlay').style.display = 'none'; }
     function toggleAdmDateInput() { var mode = document.getElementById('adm-mode').value; document.getElementById('adm-date-box').style.display = mode==='date' ? 'block' : 'none'; document.getElementById('adm-month-box').style.display = mode==='month' ? 'block' : 'none'; }
     function doReg(){ var u=document.getElementById('r-u').value, p=document.getElementById('r-p').value, maj=document.getElementById('r-maj').value, min=document.getElementById('r-min').value; if(!u||!p||!maj||!min){ alert("請填寫完整"); return; } loading(true); callApi('register', {u:u, p:p, maj:maj, min:min}).then(r => { loading(false); alert(r.msg); if(r.success) toggleAuth('login'); }); }
@@ -606,7 +658,47 @@
     function setLocalReminder() { var t = document.getElementById('reminder-time').value; localStorage.setItem("reminder_time", t); if('Notification' in window) Notification.requestPermission(); alert("提醒時間已設定為 " + t); }
     function changeMonth(delta) { curMonth += delta; if(curMonth > 12) { curMonth = 1; curYear++; } if(curMonth < 1) { curMonth = 12; curYear--; } loadCalendar(); }
     function loadCalendar() { var mStr = curYear + "-" + (curMonth<10?"0"+curMonth:curMonth); document.getElementById('cal-title').innerText = mStr; document.getElementById('calendar-area').innerHTML = "Loading..."; document.getElementById('profile-stats').innerHTML = ""; document.getElementById('profile-log-list').innerHTML = ""; callApi('getCalendarData', {u:gUser, year:curYear, month:curMonth}).then(res => { var daysInMonth = new Date(curYear, curMonth, 0).getDate(); var html = ""; for(var d=1; d<=daysInMonth; d++) { var dStr = mStr + "-" + (d<10?"0"+d:d); var dayData = res.cal[dStr]; var cls = "cal-day"; if(dayData) { var count = 0; if(dayData.read) count++; if(dayData.sport) count++; if(dayData.achieve) count++; if(count > 0) cls += " cal-fill-" + count; } html += `<div class="${cls}">${d}</div>`; } document.getElementById('calendar-area').innerHTML = html; var s = res.stats; document.getElementById('profile-stats').innerHTML = `<b>📊 ${mStr} 月報表</b><br>運動: ${s.sportDays}天 | 讀書: ${s.readDays}天 | 開口: ${s.totalSpoke}`; var logHtml = res.logs.map(l => `<div class="log-item"><div class="log-time" style="width:80px;">${l.time}</div><div class="log-content"><b>${l.action}</b> ${l.detail}</div></div>`).join(''); document.getElementById('profile-log-list').innerHTML = logHtml || "無紀錄"; }); }
-    function loadOrchard(){ document.getElementById('orchard-container').innerHTML = 'Loading...'; callApi('getOrchardData').then(data => { var html = ""; for(var key in data){ var h = data[key]; var fruits = ""; var sp = Number(h.spoke)||0; var cv = Number(h.convert)||0; var cl = Number(h.joinClass)||0; var redFruits = Math.floor(sp / 10); var totalPoints = redFruits + cv + cl; var treeClass = "tree-scale-s"; if(totalPoints > 20) treeClass = "tree-scale-l"; else if(totalPoints > 5) treeClass = "tree-scale-m"; for(var i=0; i<redFruits && i<10; i++) fruits += '<div class="fruit red"></div>'; for(var i=0; i<cv && i<10; i++) fruits += '<div class="fruit gold"></div>'; for(var i=0; i<cl && i<10; i++) fruits += '<div class="fruit blue"></div>'; if(totalPoints == 0) fruits = '<span style="font-size:10px; color:#fff;">種子</span>'; var info = `開口:${sp} 渡眾:${cv} 入班:${cl}`; html += `<div class="tree-container ${treeClass}" onclick="openHallModal('${h.name}', '${info}')"><div class="tree-canopy">${fruits}</div><div class="tree-trunk"></div><div class="tree-label">${h.name}<br><span style="font-size:10px;">${h.members}人</span></div></div>`; } document.getElementById('orchard-container').innerHTML = html || "無資料"; }); }
+    
+    // 🔴 Orchard (整合版)
+    function loadOrchard(){ 
+      document.getElementById('orchard-container').innerHTML = 'Loading...'; 
+      document.getElementById('log-container').innerHTML = 'Loading Logs...';
+      
+      callApi('getOrchardData').then(data => { 
+        var html = ""; 
+        var totalSpoke = 0, totalConv = 0, totalClass = 0;
+        
+        for(var key in data){ 
+          var h = data[key]; 
+          // 累加總數
+          var s = Number(h.spoke)||0; var c = Number(h.convert)||0; var cl = Number(h.joinClass)||0;
+          totalSpoke += s; totalConv += c; totalClass += cl;
+          
+          var fruits = ""; 
+          var redFruits = Math.floor(s / 10); 
+          var totalPoints = redFruits + c + cl; 
+          var treeClass = "tree-scale-s"; 
+          if(totalPoints > 20) treeClass = "tree-scale-l"; else if(totalPoints > 5) treeClass = "tree-scale-m"; 
+          for(var i=0; i<redFruits && i<10; i++) fruits += '<div class="fruit red"></div>'; 
+          for(var i=0; i<c && i<10; i++) fruits += '<div class="fruit gold"></div>'; 
+          for(var i=0; i<cl && i<10; i++) fruits += '<div class="fruit blue"></div>'; 
+          if(totalPoints == 0) fruits = '<span style="font-size:10px; color:#fff;">種子</span>'; 
+          var info = `開口:${s} 渡眾:${c} 入班:${cl}`; 
+          html += `<div class="tree-container ${treeClass}" onclick="openHallModal('${h.name}', '${info}')"><div class="tree-canopy">${fruits}</div><div class="tree-trunk"></div><div class="tree-label">${h.name}<br><span style="font-size:10px;">${h.members}人</span></div></div>`; 
+        } 
+        
+        // 更新儀表板
+        document.getElementById('dash-spoke').innerText = totalSpoke;
+        document.getElementById('dash-conv').innerText = totalConv;
+        document.getElementById('dash-class').innerText = totalClass;
+        
+        document.getElementById('orchard-container').innerHTML = html || "無資料"; 
+        
+        // 載入下方歷程
+        loadGlobalLogs();
+      }); 
+    }
+    
     function openHallModal(name, info) { document.getElementById('modal-overlay').style.display = 'flex'; document.getElementById('modal-title').innerText = name; document.getElementById('modal-content').innerHTML = `<div style="background:#f1f8e9; padding:10px; border-radius:10px; margin-bottom:10px;"><b>📊 公堂總成績</b><br>${info}</div><div id="hall-members">成員載入中...</div>`; callApi('getHallDetails', {hall:name}).then(res => { var h = res.list.map(m => `<div class="member-row"><span>${m.name}</span><span>開${m.s}/渡${m.c}/班${m.cl}</span></div>`).join(''); document.getElementById('hall-members').innerHTML = h; }); }
     function updateMarquee() { var msg = document.getElementById('adm-marquee').value; if(!msg) return; callApi('updateMarquee', {msg:msg}).then(r => { alert(r.msg); document.getElementById('marquee-text').innerText = msg; }); }
     function loadAdminFilters() { if(Object.keys(menuConfig).length > 0) { initMaj(); } else { callApi('getConfig').then(cfg => { menuConfig = cfg.menu; initMaj(); }); } } 
