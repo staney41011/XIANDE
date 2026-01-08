@@ -9,50 +9,65 @@
   
   <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
   <script>
-    const APP_VERSION = "20250104-CRM-V1"; 
+    // 🔴 版本號：修改此處以強制使用者手機更新
+    const APP_VERSION = "20250104-Root-CRM-Final"; 
 
+    // --- 自動更新機制 ---
     (function checkUpdate() {
       const savedVersion = localStorage.getItem("app_version");
       if (savedVersion !== APP_VERSION) {
-        console.log(`更新版本: ${APP_VERSION}`);
+        console.log(`偵測到新版本: ${APP_VERSION}，執行清理...`);
+        // 註銷舊 Worker
         if ('serviceWorker' in navigator) {
           navigator.serviceWorker.getRegistrations().then(function(regs) {
             for (let reg of regs) { reg.unregister(); }
           });
         }
+        // 清除快取
         if ('caches' in window) {
           caches.keys().then(function(names) { for (let name of names) caches.delete(name); });
         }
         localStorage.setItem("app_version", APP_VERSION);
+        // 延遲重整確保清除完成
         setTimeout(() => { window.location.reload(true); }, 500);
         return;
       }
     })();
 
+    // --- OneSignal 初始化 (根目錄版本) ---
     window.OneSignalDeferred = window.OneSignalDeferred || [];
     OneSignalDeferred.push(function(OneSignal) {
       OneSignal.init({
         appId: "2c0c1bb1-f413-474e-bc2d-45586547b981", 
         notifyButton: { enable: true },
         allowLocalhostAsSecureOrigin: true,
-        path: "/XIANDE/", 
+        // 🔴 修正：移除 path 與 scope，適配根目錄
         serviceWorkerPath: "OneSignalSDKWorker.js",
-        serviceWorkerParam: { scope: "/XIANDE/" }
       });
+      // 設定標籤 (所有人預設開啟即時通知)
+      OneSignal.User.addTag("notify", "instant");
     });
   </script>
 
   <style>
-    /* CSS 樣式 (保持原本) */
+    /* --- 全域樣式 --- */
     :root { --bg-color: #fdfbf7; --card-bg: #ffffff; --primary: #8bc34a; --accent: #ffb74d; --blue: #81d4fa; --red: #ff8a80; --text: #5d5d5d; --shadow: 0 4px 12px rgba(0,0,0,0.08); }
     * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
     body { font-family: 'Varela Round', sans-serif; background: var(--bg-color); color: var(--text); margin: 0; height: 100vh; display: flex; flex-direction: column; overflow: hidden;}
     
+    /* 底部導航列 (固定定位 + iOS 安全區適配) */
     .bottom-nav { 
-      position: fixed; bottom: 0; left: 0; width: 100%;
-      background: #fff; border-top: 1px solid #eee; 
-      display: flex; justify-content: space-around; align-items: center;
-      z-index: 1000; height: 60px; 
+      position: fixed; 
+      bottom: 0; 
+      left: 0; 
+      width: 100%;
+      background: #fff; 
+      border-top: 1px solid #eee; 
+      display: flex; 
+      justify-content: space-around; 
+      align-items: center;
+      z-index: 1000; 
+      height: 60px; 
       padding-bottom: env(safe-area-inset-bottom);
       box-sizing: content-box; 
     }
@@ -60,27 +75,31 @@
     .nav-btn.active { color: var(--primary); transform: scale(1.1); transition: 0.2s;}
     .nav-icon { font-size: 20px; display: block; margin-bottom: 2px; }
 
+    /* 內容視窗 (預留底部空間防止遮擋) */
     .viewport { flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; align-items: center; width: 100%; padding-bottom: 100px; }
     .top-nav { background: #fff; padding: 10px 15px; display: flex; flex-direction: column; box-shadow: 0 2px 5px rgba(0,0,0,0.05); z-index: 10; flex-shrink: 0;}
     .nav-header { display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 5px;}
     
+    /* 卡片與元件 */
     .card { background: var(--card-bg); border-radius: 20px; box-shadow: var(--shadow); padding: 20px; margin-bottom: 15px; width: 95%; max-width: 380px; border: 2px solid #fff; margin-left: auto; margin-right: auto; position: relative;}
     .btn { width: 100%; padding: 12px; border-radius: 12px; border: none; font-weight: bold; color: #fff; cursor: pointer; margin-top: 5px; box-shadow: 0 3px 0 rgba(0,0,0,0.1); }
     .btn:active { transform: translateY(2px); box-shadow: none; }
     .btn-primary { background: var(--blue); } .btn-success { background: var(--primary); } .btn-warn { background: var(--accent); }
     .input-field { width: 100%; padding: 10px; margin: 5px 0; border: 2px solid #eee; border-radius: 10px; background: #fafafa; outline: none; font-family: inherit;}
     
+    /* 頁面切換動畫 */
     .view-section { display: none; width: 100%; animation: fadeIn 0.3s; } 
     .view-section.active { display: block; }
     @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
     
+    /* 登入與跑馬燈 */
     #auth-screen { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; background: linear-gradient(135deg, #e0f7fa, #fff3e0); width: 100%; position: absolute; top:0; left:0; height: 100%; z-index: 200; }
     #game-screen { display: none; height: 100%; flex-direction: column; width: 100%; }
     .marquee-container { background: #d32f2f; color: #fff; font-size: 12px; white-space: nowrap; overflow: hidden; border-radius: 4px; padding: 2px 0; width: 100%; }
     .marquee-text { display: inline-block; padding-left: 100%; animation: scroll 15s linear infinite; }
     @keyframes scroll { 0% { transform: translateX(0); } 100% { transform: translateX(-100%); } }
 
-    /* Orchard Styles */
+    /* 果樹 */
     .orchard-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 20px; width: 100%; padding-bottom: 20px;}
     .tree-container { text-align: center; margin-bottom: 10px; cursor: pointer; transition: transform 0.1s; position: relative;}
     .tree-container:active { transform: scale(0.95); }
@@ -93,7 +112,7 @@
     .fruit { width: 12px; height: 12px; border-radius: 50%; margin: 2px; box-shadow: 1px 1px 2px rgba(0,0,0,0.2); flex-shrink: 0;}
     .fruit.red { background: var(--red); } .fruit.gold { background: #ffd700; } .fruit.blue { background: #29b6f6; } 
 
-    /* Achieve Styles */
+    /* 修煉頁面 (+/- 按鈕) */
     .achieve-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; font-size: 14px;}
     .achieve-input-group { display: flex; align-items: center; gap: 8px; }
     .achieve-input { width: 50px; text-align: center; border: 2px solid #eee; border-radius: 8px; padding: 5px; font-weight: bold; color: var(--text); background:#fafafa;}
@@ -103,13 +122,14 @@
     .btn-minus:active { background: #ddd; transform: scale(0.9); }
     .today-dashboard { background: #f0f4c3; padding: 10px; border-radius: 10px; margin-top: 10px; font-size: 12px; color: #555; text-align: center; border: 1px solid #dce775; }
 
-    /* Calendar & Log */
+    /* 日曆與報表 */
     .calendar-ctrl { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
     .calendar-ctrl button { background: none; border: 1px solid #ddd; border-radius: 5px; padding: 2px 10px; cursor: pointer; color: #555; }
     .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; width: 100%; margin-top: 10px; min-height: 100px;}
     .cal-day { aspect-ratio: 1; border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 10px; background: #eee; color: #aaa; position: relative; overflow: hidden; }
     .cal-fill-1 { background: #c8e6c9; color: #2e7d32; } .cal-fill-2 { background: #81c784; color: #1b5e20; } .cal-fill-3 { background: #4caf50; color: #fff; font-weight:bold; }
 
+    /* 彈窗與 Log */
     #modal-overlay { position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:2000; display:none; justify-content:center; align-items:center; }
     .modal-box { background:#fff; padding:20px; border-radius:15px; width:85%; max-width:320px; max-height:80%; overflow-y:auto; position:relative; }
     .modal-close { position:absolute; top:10px; right:15px; font-size:20px; cursor:pointer; color:#aaa; }
@@ -126,10 +146,11 @@
     .profile-stats { margin-top: 15px; border-top: 1px dashed #eee; padding-top: 10px; font-size: 12px; line-height: 1.8; color: #555; }
     .profile-logs { margin-top: 15px; border-top: 1px dashed #eee; padding-top: 10px; font-size: 12px; }
     .profile-logs h5 { margin: 0 0 10px 0; color: #666; }
+    
+    /* 主領班篩選區 */
     .admin-row { display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid #eee; font-size:12px; align-items:center;}
     .admin-stat-badges span { padding:2px 5px; border-radius:4px; font-size:10px; margin-left:3px; color:#fff;}
     .member-row { display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid #eee; font-size:12px; }
-
     .filter-group { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:10px; }
     .filter-label { padding: 8px 12px; background: #fff; border: 1px solid #ddd; border-radius: 20px; font-size: 12px; cursor: pointer; color: #666; transition: all 0.2s; user-select: none; display: flex; align-items: center; }
     .filter-label input { margin-right: 5px; }
@@ -141,7 +162,7 @@
     .todo-check { margin-right: 10px; width: 20px; height: 20px; cursor: pointer; }
     .todo-text { flex: 1; font-size: 13px; color: #555; }
     
-    .crm-card { background: #fff; border: 1px solid #eee; border-radius: 12px; padding: 12px; margin-bottom: 10px; cursor: pointer; transition: transform 0.1s; position: relative; }
+    .crm-card { background: #fff; border: 1px solid #eee; border-radius: 12px; padding: 12px; margin-bottom: 10px; cursor: pointer; transition: transform 0.1s; position: relative; box-shadow: 0 2px 5px rgba(0,0,0,0.02); }
     .crm-card:active { transform: scale(0.98); }
     .crm-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; }
     .crm-name { font-weight: bold; font-size: 14px; color: #333; }
@@ -234,6 +255,7 @@
 
       <div id="v-crm" class="view-section">
          <div class="card" style="background:#fffde7; border:1px solid #fff59d;">
+            <div class="help-btn" onclick="alert('這裡會自動列出您在名單中填寫的「下一步」。\n打勾代表已完成，系統會清除該項待辦。')">?</div>
             <h3 style="margin-top:0; color:#fbc02d;">📝 待辦事項</h3>
             <div id="crm-todo-list" class="todo-list">
                <div style="text-align:center; color:#999; font-size:12px;">無待辦事項</div>
@@ -337,7 +359,7 @@
     var timerInt=null, isTimer=false, lastLogTime=0;
     var curYear = new Date().getFullYear();
     var curMonth = new Date().getMonth() + 1;
-    var crmData = []; // 暫存 CRM 資料
+    var crmData = [];
 
     // 上線提醒
     setInterval(function(){
@@ -406,30 +428,14 @@
     function renderCRM() {
        var todoHtml = "", listHtml = "";
        crmData.forEach(item => {
-          // Render Todo
           if(item.todo) {
-             todoHtml += `
-             <div class="todo-item">
-                <input type="checkbox" class="todo-check" onclick="completeTodo(${item.id})">
-                <div class="todo-text">
-                   <div style="font-weight:bold;">${item.name}</div>
-                   <div>${item.todo}</div>
-                </div>
-             </div>`;
+             todoHtml += `<div class="todo-item"><input type="checkbox" class="todo-check" onclick="completeTodo(${item.id})"><div class="todo-text"><div style="font-weight:bold;">${item.name}</div><div>${item.todo}</div></div></div>`;
           }
-          // Render Card
           var stClass = "s-plan";
           if(item.status.includes("開口")) stClass = "s-spoke";
           if(item.status.includes("入班") || item.status.includes("求道")) stClass = "s-join";
           
-          listHtml += `
-          <div class="crm-card" onclick='editCRM(${JSON.stringify(item).replace(/'/g, "&apos;")})'>
-             <div class="crm-header">
-                <div class="crm-name">${item.name}</div>
-                <div class="crm-status ${stClass}">${item.status}</div>
-             </div>
-             <div class="crm-note">${item.todo ? "📝 " + item.todo : (item.note || "無備註")}</div>
-          </div>`;
+          listHtml += `<div class="crm-card" onclick='editCRM(${JSON.stringify(item).replace(/'/g, "&apos;")})'><div class="crm-header"><div class="crm-name">${item.name}</div><div class="crm-status ${stClass}">${item.status}</div></div><div class="crm-note">${item.todo ? "📝 " + item.todo : (item.note || "無備註")}</div></div>`;
        });
        
        document.getElementById('crm-todo-list').innerHTML = todoHtml || '<div style="text-align:center; color:#999; font-size:12px;">無待辦事項</div>';
@@ -443,12 +449,8 @@
        
        var html = `
          <input id="e-id" type="hidden" value="${item.id}">
-         <div style="margin-bottom:10px;">
-            <label>姓名</label>
-            <input id="e-name" class="input-field" value="${item.name}" placeholder="對象姓名">
-         </div>
-         <div style="margin-bottom:10px;">
-            <label>狀態</label>
+         <div style="margin-bottom:10px;"><label>姓名</label><input id="e-name" class="input-field" value="${item.name}" placeholder="對象姓名"></div>
+         <div style="margin-bottom:10px;"><label>狀態</label>
             <select id="e-status" class="input-field">
                <option ${item.status=='預計渡眾'?'selected':''}>預計渡眾</option>
                <option ${item.status=='已開口'?'selected':''}>已開口</option>
@@ -457,14 +459,8 @@
                <option ${item.status=='已入班'?'selected':''}>已入班</option>
             </select>
          </div>
-         <div style="margin-bottom:10px;">
-            <label>下一步 / 待辦</label>
-            <input id="e-todo" class="input-field" value="${item.todo}" placeholder="例如：約吃飯、送書">
-         </div>
-         <div style="margin-bottom:15px;">
-            <label>備註</label>
-            <textarea id="e-note" class="input-field" rows="3">${item.note}</textarea>
-         </div>
+         <div style="margin-bottom:10px;"><label>下一步 / 待辦</label><input id="e-todo" class="input-field" value="${item.todo}" placeholder="例如：約吃飯、送書"></div>
+         <div style="margin-bottom:15px;"><label>備註</label><textarea id="e-note" class="input-field" rows="3">${item.note}</textarea></div>
          <button class="btn btn-primary" onclick="saveCRMItem()">💾 儲存</button>
          ${!isNew ? `<button class="btn" style="background:#eee; color:#f44336; margin-top:10px;" onclick="deleteCRMItem(${item.id})">🗑️ 刪除</button>` : ''}
        `;
@@ -475,48 +471,29 @@
     }
 
     function saveCRMItem() {
-       var item = {
-          id: document.getElementById('e-id').value,
-          name: document.getElementById('e-name').value,
-          status: document.getElementById('e-status').value,
-          todo: document.getElementById('e-todo').value,
-          note: document.getElementById('e-note').value
-       };
+       var item = { id: document.getElementById('e-id').value, name: document.getElementById('e-name').value, status: document.getElementById('e-status').value, todo: document.getElementById('e-todo').value, note: document.getElementById('e-note').value };
        if(!item.name) { alert("請輸入姓名"); return; }
-       
        loading(true);
-       callApi('saveCRM', {u:gUser, item:item}).then(res => {
-          loading(false);
-          closeModal();
-          loadCRM(); // Reload list
-       });
+       callApi('saveCRM', {u:gUser, item:item}).then(res => { loading(false); closeModal(); loadCRM(); });
     }
 
     function deleteCRMItem(id) {
        if(!confirm("確定要刪除此筆資料嗎？")) return;
        loading(true);
-       callApi('deleteCRM', {u:gUser, idx:id}).then(res => {
-          loading(false);
-          closeModal();
-          loadCRM();
-       });
+       callApi('deleteCRM', {u:gUser, idx:id}).then(res => { loading(false); closeModal(); loadCRM(); });
     }
 
     function completeTodo(id) {
        if(!confirm("完成此待辦事項？")) return;
-       // Find item locally first to get data
        var item = crmData.find(x => x.id == id);
        if(item) {
-          item.todo = ""; // Clear todo
+          item.todo = ""; 
           loading(true);
-          callApi('saveCRM', {u:gUser, item:item}).then(res => {
-             loading(false);
-             loadCRM();
-          });
+          callApi('saveCRM', {u:gUser, item:item}).then(res => { loading(false); loadCRM(); });
        }
     }
 
-    // --- (其他原有函式保持不變) ---
+    // --- (其他原有函式) ---
     function initRegDropdowns(){ var s=document.getElementById('r-maj'), opts="<option disabled selected>選擇團隊</option>"; for(var k in menuConfig){ opts += `<option value="${k}">${k}</option>`; } s.innerHTML = opts; }
     function initAdminDropdowns(){ var s=document.getElementById('adm-maj'), opts="<option value='全部'>全部團隊</option>"; for(var k in menuConfig){ opts += `<option value="${k}">${k}</option>`; } s.innerHTML = opts; admUpdMin(); }
     function updMinor(){ var m=document.getElementById('r-maj').value, s=document.getElementById('r-min'); s.innerHTML=""; if(menuConfig[m]) menuConfig[m].forEach(x => { var o=document.createElement('option'); o.value=x; o.innerText=x; s.appendChild(o); }); }
