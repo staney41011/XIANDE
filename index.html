@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <title>賢德志士</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <link rel="manifest" href="manifest.json">
+  <link href="https://fonts.googleapis.com/css2?family=Varela+Round&display=swap" rel="stylesheet">
+  
+  <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+  <script>
+    // 🔴 版本號：修改此處強制更新
+    const APP_VERSION = "20250104-Root-Fix-Final"; 
+
+    // --- 自動更新機制 ---
+    (function checkUpdate() {
+      const savedVersion = localStorage.getItem("app_version");
+      if (savedVersion !== APP_VERSION) {
+        console.log(`偵測到新版本: ${APP_VERSION}，執行清理...`);
+        // 註銷舊 Worker
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.getRegistrations().then(function(regs) {
+            for (let reg of regs) { reg.unregister(); }
+          });
+        }
+        // 清除快取
+        if ('caches' in window) {
+          caches.keys().then(function(names) { for (let name of names) caches.delete(name); });
+        }
+        localStorage.setItem("app_version", APP_VERSION);
+        // 延遲重整確保清除完成
+        setTimeout(() => { window.location.reload(true); }, 500);
+        return;
+      }
+    })();
+
+    // --- OneSignal 初始化 (完全根目錄模式) ---
+    window.OneSignalDeferred = window.OneSignalDeferred || [];
+    OneSignalDeferred.push(function(OneSignal) {
+      OneSignal.init({
+        appId: "2c0c1bb1-f413-474e-bc2d-45586547b981", 
+        notifyButton: { enable: true },
+        allowLocalhostAsSecureOrigin: true,
+        
+        // 🔴 關鍵修正：
+        // 1. 移除 path: "/XIANDE/" (因為現在是根目錄)
+        // 2. 移除 scope 設定 (讓它自動抓取全域)
+        // 3. 只要指定檔案名稱即可
+        serviceWorkerPath: "OneSignalSDKWorker.js", 
+      });
+      
+      // 預設開啟即時通知
+      OneSignal.User.addTag("notify", "instant");
+    });
+  </script>
+
+  <style>
+    /* --- 全域樣式 --- */
+    :root { --bg-color: #fdfbf7; --card-bg: #ffffff; --primary: #8bc34a; --accent: #ffb74d; --blue: #81d4fa; --red: #ff8a80; --text: #5d5d5d; --shadow: 0 4px 12px rgba(0,0,0,0.08); }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body { font-family: 'Varela Round', sans-serif; background: var(--bg-color); color: var(--text); margin: 0; height: 100vh; display: flex; flex-direction: column; overflow: hidden;}
+    
+    /* 底部導航列 (固定定位 + iOS 安全區適配) */
+    .bottom-nav { 
+      position: fixed; 
+      bottom: 0; 
+      left: 0; 
+      width: 100%;
+      background: #fff; 
+      border-top: 1px solid #eee; 
+      display: flex; 
+      justify-content: space-around; 
+      align-items: center;
+      z-index: 1000; 
+      height: 60px; 
+      padding-bottom: env(safe-area-inset-bottom);
+      box-sizing: content-box; 
+    }
+    .nav-btn { background: none; border: none; color: #ccc; font-size: 10px; flex: 1; text-align: center; cursor: pointer; }
+    .nav-btn.active { color: var(--primary); transform: scale(1.1); transition: 0.2s;}
+    .nav-icon { font-size: 20px; display: block; margin-bottom: 2px; }
+
+    /* 內容視窗 (預留底部空間防止遮擋) */
+    .viewport { flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; align-items: center; width: 100%; padding-bottom: 100px; }
+    .top-nav { background: #fff; padding: 10px 15px; display: flex; flex-direction: column; box-shadow: 0 2px 5px rgba(0,0,0,0.05); z-index: 10; flex-shrink: 0;}
+    .nav-header { display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 5px;}
+    
+    /* 卡片與元件 */
+    .card { background: var(--card-bg); border-radius: 20px; box-shadow: var(--shadow); padding: 20px; margin-bottom: 15px; width: 95%; max-width: 380px; border: 2px solid #fff; margin-left: auto; margin-right: auto; position: relative;}
+    .btn { width: 100%; padding: 12px; border-radius: 12px; border: none; font-weight: bold; color: #fff; cursor: pointer; margin-top: 5px; box-shadow: 0 3px 0 rgba(0,0,0,0.1); }
+    .btn:active { transform: translateY(2px); box-shadow: none; }
+    .btn-primary { background: var(--blue); } .btn-success { background: var(--primary); } .btn-warn { background: var(--accent); }
+    .input-field { width: 100%; padding: 10px; margin: 5px 0; border: 2px solid #eee; border-radius: 10px; background: #fafafa; outline: none; font-family: inherit;}
+    
+    /* 頁面切換動畫 */
+    .view-section { display: none; width: 100%; animation: fadeIn 0.3s; } 
+    .view-section.active { display: block; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+    
+    /* 登入與跑馬燈 */
+    #auth-screen { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; background: linear-gradient(135deg, #e0f7fa, #fff3e0); width: 100%; position: absolute; top:0; left:0; height: 100%; z-index: 200; }
+    #game-screen { display: none; height: 100%; flex-direction: column; width: 100%; }
+    .marquee-container { background: #d32f2f; color: #fff; font-size: 12px; white-space: nowrap; overflow: hidden; border-radius: 4px; padding: 2px 0; width: 100%; }
+    .marquee-text { display: inline-block; padding-left: 100%; animation: scroll 15s linear infinite; }
+    @keyframes scroll { 0% { transform: translateX(0); } 100% { transform: translateX(-100%); } }
+
+    /* 果樹 */
+    .orchard-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 20px; width: 100%; padding-bottom: 20px;}
+    .tree-container { text-align: center; margin-bottom: 10px; cursor: pointer; transition: transform 0.1s; position: relative;}
+    .tree-container:active { transform: scale(0.95); }
+    .tree-canopy { background: #66bb6a; border-radius: 50% 50% 40% 40%; margin: 0 auto; padding: 5px; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; box-shadow: inset -5px -5px 10px rgba(0,0,0,0.1); position: relative; transition: width 0.3s, height 0.3s; }
+    .tree-trunk { background: #8d6e63; margin: -2px auto 0 auto; border-radius: 0 0 5px 5px;}
+    .tree-scale-s .tree-canopy { width: 100px; min-height: 80px; } .tree-scale-s .tree-trunk { width: 15px; height: 20px; }
+    .tree-scale-m .tree-canopy { width: 130px; min-height: 100px; } .tree-scale-m .tree-trunk { width: 20px; height: 30px; }
+    .tree-scale-l .tree-canopy { width: 160px; min-height: 120px; } .tree-scale-l .tree-trunk { width: 25px; height: 40px; }
+    .tree-label { background: #fff; border: 1px solid #eee; padding: 4px 8px; border-radius: 8px; font-size: 12px; margin-top: 5px; display: inline-block; font-weight: bold; color: #333; box-shadow: 0 2px 5px rgba(0,0,0,0.05); line-height: 1.4; min-width: 90px; }
+    .fruit { width: 12px; height: 12px; border-radius: 50%; margin: 2px; box-shadow: 1px 1px 2px rgba(0,0,0,0.2); flex-shrink: 0;}
+    .fruit.red { background: var(--red); } .fruit.gold { background: #ffd700; } .fruit.blue { background: #29b6f6; } 
+
+    /* 修煉頁面 (+/- 按鈕) */
+    .achieve-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; font-size: 14px;}
+    .achieve-input-group { display: flex; align-items: center; gap: 8px; }
+    .achieve-input { width: 50px; text-align: center; border: 2px solid #eee; border-radius: 8px; padding: 5px; font-weight: bold; color: var(--text); background:#fafafa;}
+    .btn-plus { width: 32px; height: 32px; border-radius: 50%; border: none; background: #e8f5e9; color: var(--primary); font-weight: bold; cursor: pointer; display: flex; justify-content: center; align-items: center; font-size: 18px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+    .btn-plus:active { background: #c8e6c9; transform: scale(0.9); }
+    .btn-minus { width: 32px; height: 32px; border-radius: 50%; border: none; background: #eee; color: #777; font-weight: bold; cursor: pointer; display: flex; justify-content: center; align-items: center; font-size: 18px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+    .btn-minus:active { background: #ddd; transform: scale(0.9); }
+    .today-dashboard { background: #f0f4c3; padding: 10px; border-radius: 10px; margin-top: 10px; font-size: 12px; color: #555; text-align: center; border: 1px solid #dce775; }
+
+    /* 日曆與報表 */
+    .calendar-ctrl { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+    .calendar-ctrl button { background: none; border: 1px solid #ddd; border-radius: 5px; padding: 2px 10px; cursor: pointer; color: #555; }
+    .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; width: 100%; margin-top: 10px; min-height: 100px;}
+    .cal-day { aspect-ratio: 1; border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 10px; background: #eee; color: #aaa; position: relative; overflow: hidden; }
+    .cal-fill-1 { background: #c8e6c9; color: #2e7d32; } .cal-fill-2 { background: #81c784; color: #1b5e20; } .cal-fill-3 { background: #4caf50; color: #fff; font-weight:bold; }
+
+    /* 彈窗與 Log */
+    #modal-overlay { position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:2000; display:none; justify-content:center; align-items:center; }
+    .modal-box { background:#fff; padding:20px; border-radius:15px; width:85%; max-width:320px; max-height:80%; overflow-y:auto; position:relative; }
+    .modal-close { position:absolute; top:10px; right:15px; font-size:20px; cursor:pointer; color:#aaa; }
+    .log-item { padding: 10px; border-bottom: 1px solid #f0f0f0; display: flex; align-items: flex-start; text-align: left;}
+    .log-time { font-size: 10px; color: #999; width: 60px; flex-shrink: 0; margin-top: 2px;}
+    .log-content { font-size: 13px; color: #444; flex: 1;}
+    .log-tag { font-size: 10px; padding: 2px 4px; border-radius: 4px; background: #eee; margin-right: 5px; color: #666;}
+    .help-btn { position: absolute; top: 10px; right: 10px; width: 20px; height: 20px; border-radius: 50%; background: #eee; color: #999; font-size: 12px; display: flex; justify-content: center; align-items: center; cursor: pointer; }
+    
+    #loading { position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(255,255,255,0.8); z-index:3000; display:none; justify-content:center; align-items:center; flex-direction:column;}
+    .spinner { width: 30px; height: 30px; border: 4px solid #f3f3f3; border-top: 4px solid var(--primary); border-radius: 50%; animation: spin 1s linear infinite; }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    
+    .profile-stats { margin-top: 15px; border-top: 1px dashed #eee; padding-top: 10px; font-size: 12px; line-height: 1.8; color: #555; }
+    .profile-logs { margin-top: 15px; border-top: 1px dashed #eee; padding-top: 10px; font-size: 12px; }
+    .profile-logs h5 { margin: 0 0 10px 0; color: #666; }
+    
+    /* 主領班篩選區 */
+    .admin-row { display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid #eee; font-size:12px; align-items:center;}
+    .admin-stat-badges span { padding:2px 5px; border-radius:4px; font-size:10px; margin-left:3px; color:#fff;}
+    .member-row { display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid #eee; font-size:12px; }
+    .filter-group { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:10px; }
+    .filter-label { padding: 8px 12px; background: #fff; border: 1px solid #ddd; border-radius: 20px; font-size: 12px; cursor: pointer; color: #666; transition: all 0.2s; user-select: none; display: flex; align-items: center; }
+    .filter-label input { margin-right: 5px; }
+    .filter-label:has(input:checked) { background: var(--primary); color: #fff; border-color: var(--primary); }
+
+    /* 🔴 CRM (記事本) 樣式 */
+    .todo-list { margin-bottom: 15px; }
+    .todo-item { display: flex; align-items: center; background: #fff9c4; padding: 10px; margin-bottom: 8px; border-radius: 8px; box-shadow: 0 2px 2px rgba(0,0,0,0.05); }
+    .todo-check { margin-right: 10px; width: 20px; height: 20px; cursor: pointer; }
+    .todo-text { flex: 1; font-size: 13px; color: #555; }
+    
+    .crm-card { background: #fff; border: 1px solid #eee; border-radius: 12px; padding: 12px; margin-bottom: 10px; cursor: pointer; transition: transform 0.1s; position: relative; box-shadow: 0 2px 5px rgba(0,0,0,0.02); }
+    .crm-card:active { transform: scale(0.98); }
+    .crm-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; }
+    .crm-name { font-weight: bold; font-size: 14px; color: #333; }
+    .crm-status { font-size: 10px; padding: 3px 8px; border-radius: 10px; background: #eee; color: #666; }
+    .crm-status.s-plan { background: #e3f2fd; color: #1976d2; }
+    .crm-status.s-spoke { background: #fff3e0; color: #e64a19; }
+    .crm-status.s-join { background: #e8f5e9; color: #2e7d32; }
+    .crm-note { font-size: 12px; color: #888; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    
+    .fab { position: fixed; bottom: 80px; right: 20px; width: 50px; height: 50px; background: var(--accent); color: #fff; border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 24px; box-shadow: 0 4px 10px rgba(0,0,0,0.2); cursor: pointer; z-index: 500; }
+  </style>
+</head>
+<body>
+
+  <div id="loading"><div class="spinner"></div><div style="margin-top:10px; font-size:12px; color:#888;">連線中...</div></div>
+  
+  <div id="modal-overlay" onclick="closeModal()">
+    <div class="modal-box" onclick="event.stopPropagation()">
+      <div class="modal-close" onclick="closeModal()">&times;</div>
+      <h3 id="modal-title" style="margin-top:0; color:var(--primary);">詳細資訊</h3>
+      <div id="modal-content">Loading...</div>
+    </div>
+  </div>
+
+  <div id="auth-screen">
+    <div style="font-size:26px; color:var(--text); margin-bottom:20px;">🌳 賢德志士</div>
+    <div class="card">
+      <div style="display:flex; margin-bottom:15px; border-bottom:1px solid #eee;">
+        <div onclick="toggleAuth('login')" style="flex:1; text-align:center; padding:10px; cursor:pointer; color:var(--primary); font-weight:bold;">登入</div>
+        <div onclick="toggleAuth('register')" style="flex:1; text-align:center; padding:10px; cursor:pointer; color:#aaa;">註冊</div>
+      </div>
+      <div id="f-login">
+        <input id="l-u" class="input-field" placeholder="求道名">
+        <input id="l-p" type="password" class="input-field" placeholder="密碼">
+        <button class="btn btn-primary" onclick="doLogin()">進入果園</button>
+        <div style="text-align:center; margin-top:10px; font-size:12px; color:#aaa;">忘記密碼請洽瑋倫</div>
+      </div>
+      <div id="f-reg" style="display:none;">
+        <input id="r-u" class="input-field" placeholder="設定求道名">
+        <input id="r-p" type="password" class="input-field" placeholder="設定密碼">
+        <select id="r-maj" class="input-field" onchange="updMinor()"><option>載入中...</option></select>
+        <select id="r-min" class="input-field"><option>請先選團隊</option></select>
+        <button class="btn btn-success" onclick="doReg()">加入志士</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="game-screen">
+    <div class="top-nav">
+      <div class="nav-header">
+         <span style="font-weight:bold; color:var(--primary); font-size:16px;">賢德志士</span>
+         <span id="ui-team" style="font-size:12px; color:#999;">--</span>
+      </div>
+      <div class="marquee-container">
+         <div id="marquee-text" class="marquee-text">歡迎回到賢德志士修辦系統！</div>
+      </div>
+    </div>
+
+    <div class="viewport">
+      <div id="v-home" class="view-section active">
+        <div class="card">
+           <div class="help-btn" onclick="alert('點擊「開始計時」累積讀書時間。\n離開網頁會自動暫停。')">?</div>
+           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+             <span>📖 讀書計時</span>
+             <span id="timer-display" style="font-size:20px; font-weight:bold; color:#ccc;">00:00</span>
+           </div>
+           <button id="btn-timer" class="btn btn-primary" onclick="toggleTimer()">開始計時</button>
+        </div>
+        <div class="card" onclick="toggleSport()" style="display:flex; align-items:center; cursor:pointer;">
+           <div class="help-btn" onclick="event.stopPropagation(); alert('點擊卡片即可完成今日運動打卡。')">?</div>
+           <div id="ck-sport" style="width:24px; height:24px; border-radius:50%; border:2px solid #ddd; margin-right:15px; display:flex; justify-content:center; align-items:center; color:#fff;">✓</div>
+           <span>🏃 每日運動 30 分鐘</span>
+        </div>
+        
+        <div class="card">
+          <div class="help-btn" onclick="alert('點擊「+」或「-」調整數量。\n下方儀表板會即時顯示今日累積。\n最後記得按「確認紀錄」同步到雲端。')">?</div>
+          <h3 style="margin-top:0; font-size:16px; color:var(--accent);">🌱 今日耕耘成果</h3>
+          <div class="achieve-row"><span>🗣️ 開口</span><div class="achieve-input-group"><button class="btn-minus" onclick="minusCount('inp-spoke')">-</button><input type="number" id="inp-spoke" class="achieve-input" value="0"><button class="btn-plus" onclick="addCount('inp-spoke')">+</button></div></div>
+          <div class="achieve-row"><span>🤝 渡眾</span><div class="achieve-input-group"><button class="btn-minus" onclick="minusCount('inp-conv')">-</button><input type="number" id="inp-conv" class="achieve-input" value="0"><button class="btn-plus" onclick="addCount('inp-conv')">+</button></div></div>
+          <div class="achieve-row"><span>🏫 入班</span><div class="achieve-input-group"><button class="btn-minus" onclick="minusCount('inp-class')">-</button><input type="number" id="inp-class" class="achieve-input" value="0"><button class="btn-plus" onclick="addCount('inp-class')">+</button></div></div>
+          <div class="today-dashboard" id="today-dash">📊 今日已累積：開口 0 | 渡眾 0 | 入班 0</div>
+          <button class="btn btn-success" onclick="saveAchievements()">✅ 確認紀錄</button>
+        </div>
+      </div>
+
+      <div id="v-orchard" class="view-section" style="text-align:center;">
+        <button class="btn btn-primary" style="margin-bottom:20px; font-size:12px; padding:8px; width:auto;" onclick="loadOrchard()">🔄 更新果園</button>
+        <div id="orchard-container" class="orchard-grid"></div>
+      </div>
+
+      <div id="v-crm" class="view-section">
+         <div class="card" style="background:#fffde7; border:1px solid #fff59d;">
+            <div class="help-btn" onclick="alert('這裡會自動列出您在名單中填寫的「下一步」。\n打勾代表已完成，系統會清除該項待辦。')">?</div>
+            <h3 style="margin-top:0; color:#fbc02d;">📝 待辦事項</h3>
+            <div id="crm-todo-list" class="todo-list">
+               <div style="text-align:center; color:#999; font-size:12px;">無待辦事項</div>
+            </div>
+         </div>
+         
+         <div style="padding:0 10px;">
+            <h3 style="color:#555; margin-bottom:10px;">📇 渡眾名單</h3>
+            <div id="crm-list">載入中...</div>
+         </div>
+         <div class="fab" onclick="editCRM(null)">+</div>
+      </div>
+
+      <div id="v-logs" class="view-section">
+        <div style="text-align:center; margin-bottom:10px;">
+           <button class="btn btn-primary" style="padding:8px; font-size:12px; width:auto;" onclick="loadGlobalLogs()">🔄 更新動態</button>
+        </div>
+        <div id="log-container" class="card" style="padding:0; overflow:hidden; width:100%;"></div>
+      </div>
+
+      <div id="v-profile" class="view-section">
+        <div class="card" style="text-align:center;">
+           <div class="help-btn" onclick="alert('點擊「登出」可切換帳號。')">?</div>
+           <div style="font-size:40px;">🧑‍🌾</div>
+           <h3 id="p-job">修道志士</h3>
+           <div style="margin-top:15px; text-align:left;">
+             <label style="font-size:12px;">⏰ 設定「記得上線」提醒：</label>
+             <input type="time" id="reminder-time" class="input-field" onchange="setLocalReminder()">
+           </div>
+           <button class="btn btn-warn" onclick="logout()" style="width:100%; margin-top:15px; font-size:12px;">登出</button>
+        </div>
+        <div class="card">
+           <div class="calendar-ctrl">
+             <button onclick="changeMonth(-1)">&lt;</button>
+             <span id="cal-title" style="font-weight:bold;">--</span>
+             <button onclick="changeMonth(1)">&gt;</button>
+           </div>
+           <div id="calendar-area" class="calendar-grid"></div>
+           <div id="profile-stats" class="profile-stats"></div>
+           <div class="profile-logs"><h5>📅 本月明細</h5><div id="profile-log-list"></div></div>
+        </div>
+      </div>
+
+      <div id="v-admin" class="view-section">
+         <div class="card">
+           <h3>📊 渡眾記事本 (主領班)</h3>
+           <div style="background:#e3f2fd; padding:10px; border-radius:10px; margin-bottom:15px;">
+              <div style="font-size:12px; font-weight:bold; margin-bottom:5px;">📢 更新上方跑馬燈</div>
+              <input id="adm-marquee" class="input-field" placeholder="輸入公告內容...">
+              <button class="btn btn-warn" style="font-size:12px; padding:8px;" onclick="updateMarquee()">更新公告</button>
+           </div>
+           <div style="margin-bottom:15px; display:flex; gap:10px;">
+             <select id="adm-mode" class="input-field" onchange="toggleAdmDateInput()" style="flex:1;">
+               <option value="all">全部歷史</option>
+               <option value="date">指定日期</option>
+               <option value="month">指定月份</option>
+             </select>
+             <div id="adm-date-box" style="flex:1; display:none;"><input type="date" id="adm-date" class="input-field"></div>
+             <div id="adm-month-box" style="flex:1; display:none;"><input type="month" id="adm-month" class="input-field"></div>
+           </div>
+           <div style="display:flex; gap:5px; margin-bottom:10px;">
+             <select id="adm-maj" class="input-field" onchange="admUpdMin()"><option value="全部">全部團隊</option></select>
+             <select id="adm-min" class="input-field"><option value="全部">全部公堂</option></select>
+           </div>
+           <div class="filter-group" style="margin-bottom:15px;">
+             <label class="filter-label"><input type="checkbox" id="f-sport">🏃 運動</label>
+             <label class="filter-label"><input type="checkbox" id="f-read">📖 讀書</label>
+             <label class="filter-label"><input type="checkbox" id="f-spoke">🗣️ 開口</label>
+             <label class="filter-label"><input type="checkbox" id="f-conv">🤝 渡眾</label>
+             <label class="filter-label"><input type="checkbox" id="f-class">🏫 入班</label>
+           </div>
+           <button class="btn btn-primary" onclick="runAdminQuery()">🔍 查詢報表</button>
+           <div id="admin-report" class="admin-report-box" style="display:none; margin-top:15px;"></div>
+           <div id="admin-list" style="margin-top:10px;"></div>
+           <hr style="border:0; border-top:1px dashed #eee; margin:15px 0;">
+           <h4>📢 全員廣播</h4>
+           <textarea id="broadcast-msg" class="input-field" rows="2" placeholder="內容..."></textarea>
+           <div style="margin-top:5px; font-size:12px; color:#666;">
+             <label>預約發送 (選填)：</label>
+             <input type="datetime-local" id="broadcast-time" class="input-field">
+           </div>
+           <button class="btn btn-warn" onclick="sendBroadcast()">發送</button>
+         </div>
+      </div>
+    </div>
+
+    <div class="bottom-nav">
+      <button class="nav-btn active" onclick="nav('home')" id="n-home"><span class="nav-icon">📝</span>修煉</button>
+      <button class="nav-btn" onclick="nav('orchard'); loadOrchard()" id="n-orchard"><span class="nav-icon">🍎</span>果園</button>
+      <button class="nav-btn" onclick="nav('crm'); loadCRM()" id="n-crm"><span class="nav-icon">📒</span>記事</button>
+      <button class="nav-btn" onclick="nav('logs'); loadGlobalLogs()" id="n-logs"><span class="nav-icon">📜</span>歷程</button>
+      <button class="nav-btn" onclick="nav('profile'); loadCalendar()" id="n-profile"><span class="nav-icon">👤</span>我的</button>
+      <button class="nav-btn" onclick="nav('admin'); loadAdminFilters()" id="n-admin" style="display:none;"><span class="nav-icon">🛡️</span>主領班</button>
+    </div>
+  </div>
+
+  <script>
+    const API_URL = "https://script.google.com/macros/s/AKfycbxHe88NVoiJkAt2pvBnCYUk_xGul1FhXTAj0kyAXA9GEIddXB1AD8j4gtjhbDEASPSr/exec";
+
+    var gUser=null, gPass=null, gData={}, menuConfig={};
+    var timerInt=null, isTimer=false, lastLogTime=0;
+    var curYear = new Date().getFullYear();
+    var curMonth = new Date().getMonth() + 1;
+    var crmData = [];
+
+    // 上線提醒
+    setInterval(function(){
+      var setTime = localStorage.getItem("reminder_time");
+      if(!setTime) return;
+      var now = new Date();
+      var nowStr = (now.getHours()<10?'0':'') + now.getHours() + ":" + (now.getMinutes()<10?'0':'') + now.getMinutes();
+      var lastRemind = localStorage.getItem("last_remind_date");
+      var today = now.toDateString();
+      if (nowStr === setTime && lastRemind !== today) {
+         localStorage.setItem("last_remind_date", today);
+         if(Notification.permission === 'granted') {
+            new Notification("賢德志士", { body: "⏰ 時間到了！記得上線寫下白陽歷史！" });
+         } else if (Notification.permission !== 'denied') {
+            Notification.requestPermission().then(perm => { if(perm === 'granted') new Notification("賢德志士", { body: "⏰ 時間到了！記得上線寫下白陽歷史！" }); });
+         } else { alert("⏰ 賢德志士提醒：\n時間到了！記得上線寫下白陽歷史！"); }
+      }
+    }, 60000); 
+
+    document.addEventListener("visibilitychange", function() {
+      if (document.hidden && isTimer) { toggleTimer(); alert("因離開畫面，計時已自動暫停。"); }
+    });
+
+    window.onload = function(){
+        loading(true);
+        var d = new Date();
+        document.getElementById('adm-date').valueAsDate = d;
+        var mStr = d.getFullYear() + "-" + ((d.getMonth()+1)<10?"0"+(d.getMonth()+1):(d.getMonth()+1));
+        document.getElementById('adm-month').value = mStr;
+
+        callApi('getConfig').then(cfg => {
+            menuConfig = cfg.menu;
+            if(cfg.announcement) document.getElementById('marquee-text').innerText = cfg.announcement;
+            initRegDropdowns();
+            initAdminDropdowns();
+            var u = localStorage.getItem("xd_u"), p = localStorage.getItem("xd_p");
+            if(u&&p){ document.getElementById('l-u').value=u; document.getElementById('l-p').value=p; doLogin(); } else { loading(false); }
+        });
+        
+        var savedTime = localStorage.getItem("reminder_time");
+        if(savedTime) document.getElementById('reminder-time').value = savedTime;
+        if('Notification' in window && Notification.permission !== 'granted') Notification.requestPermission();
+    }
+
+    function callApi(action, params) {
+        if(!params) params = {};
+        params.action = action;
+        return fetch(API_URL, {
+            method: 'POST',
+            body: JSON.stringify(params)
+        }).then(res => res.json());
+    }
+
+    function loading(x){ document.getElementById('loading').style.display = x?'flex':'none'; }
+
+    // --- CRM Logic ---
+    function loadCRM() {
+       document.getElementById('crm-list').innerHTML = '<div style="text-align:center; color:#999;">載入中...</div>';
+       callApi('getCRM', {u:gUser}).then(res => {
+          if(res.error) { alert(res.error); return; }
+          crmData = res.list || [];
+          renderCRM();
+       });
+    }
+
+    function renderCRM() {
+       var todoHtml = "", listHtml = "";
+       crmData.forEach(item => {
+          if(item.todo) {
+             todoHtml += `<div class="todo-item"><input type="checkbox" class="todo-check" onclick="completeTodo(${item.id})"><div class="todo-text"><div style="font-weight:bold;">${item.name}</div><div>${item.todo}</div></div></div>`;
+          }
+          var stClass = "s-plan";
+          if(item.status.includes("開口")) stClass = "s-spoke";
+          if(item.status.includes("入班") || item.status.includes("求道")) stClass = "s-join";
+          
+          listHtml += `<div class="crm-card" onclick='editCRM(${JSON.stringify(item).replace(/'/g, "&apos;")})'><div class="crm-header"><div class="crm-name">${item.name}</div><div class="crm-status ${stClass}">${item.status}</div></div><div class="crm-note">${item.todo ? "📝 " + item.todo : (item.note || "無備註")}</div></div>`;
+       });
+       
+       document.getElementById('crm-todo-list').innerHTML = todoHtml || '<div style="text-align:center; color:#999; font-size:12px;">無待辦事項</div>';
+       document.getElementById('crm-list').innerHTML = listHtml || '<div style="text-align:center; color:#999; margin-top:20px;">點擊右下角 + 新增名單</div>';
+    }
+
+    function editCRM(item) {
+       var title = item ? "編輯資料" : "新增名單";
+       var isNew = !item;
+       item = item || { id:0, name:"", status:"預計渡眾", todo:"", note:"" };
+       
+       var html = `
+         <input id="e-id" type="hidden" value="${item.id}">
+         <div style="margin-bottom:10px;"><label>姓名</label><input id="e-name" class="input-field" value="${item.name}" placeholder="對象姓名"></div>
+         <div style="margin-bottom:10px;"><label>狀態</label>
+            <select id="e-status" class="input-field">
+               <option ${item.status=='預計渡眾'?'selected':''}>預計渡眾</option>
+               <option ${item.status=='已開口'?'selected':''}>已開口</option>
+               <option ${item.status=='跟進中'?'selected':''}>跟進中</option>
+               <option ${item.status=='已求道'?'selected':''}>已求道</option>
+               <option ${item.status=='已入班'?'selected':''}>已入班</option>
+            </select>
+         </div>
+         <div style="margin-bottom:10px;"><label>下一步 / 待辦</label><input id="e-todo" class="input-field" value="${item.todo}" placeholder="例如：約吃飯、送書"></div>
+         <div style="margin-bottom:15px;"><label>備註</label><textarea id="e-note" class="input-field" rows="3">${item.note}</textarea></div>
+         <button class="btn btn-primary" onclick="saveCRMItem()">💾 儲存</button>
+         ${!isNew ? `<button class="btn" style="background:#eee; color:#f44336; margin-top:10px;" onclick="deleteCRMItem(${item.id})">🗑️ 刪除</button>` : ''}
+       `;
+       
+       document.getElementById('modal-title').innerText = title;
+       document.getElementById('modal-content').innerHTML = html;
+       document.getElementById('modal-overlay').style.display = 'flex';
+    }
+
+    function saveCRMItem() {
+       var item = { id: document.getElementById('e-id').value, name: document.getElementById('e-name').value, status: document.getElementById('e-status').value, todo: document.getElementById('e-todo').value, note: document.getElementById('e-note').value };
+       if(!item.name) { alert("請輸入姓名"); return; }
+       loading(true);
+       callApi('saveCRM', {u:gUser, item:item}).then(res => { loading(false); closeModal(); loadCRM(); });
+    }
+
+    function deleteCRMItem(id) {
+       if(!confirm("確定要刪除此筆資料嗎？")) return;
+       loading(true);
+       callApi('deleteCRM', {u:gUser, idx:id}).then(res => { loading(false); closeModal(); loadCRM(); });
+    }
+
+    function completeTodo(id) {
+       if(!confirm("完成此待辦事項？")) return;
+       var item = crmData.find(x => x.id == id);
+       if(item) {
+          item.todo = ""; 
+          loading(true);
+          callApi('saveCRM', {u:gUser, item:item}).then(res => { loading(false); loadCRM(); });
+       }
+    }
+
+    // --- (其他原有函式) ---
+    function initRegDropdowns(){ var s=document.getElementById('r-maj'), opts="<option disabled selected>選擇團隊</option>"; for(var k in menuConfig){ opts += `<option value="${k}">${k}</option>`; } s.innerHTML = opts; }
+    function initAdminDropdowns(){ var s=document.getElementById('adm-maj'), opts="<option value='全部'>全部團隊</option>"; for(var k in menuConfig){ opts += `<option value="${k}">${k}</option>`; } s.innerHTML = opts; admUpdMin(); }
+    function updMinor(){ var m=document.getElementById('r-maj').value, s=document.getElementById('r-min'); s.innerHTML=""; if(menuConfig[m]) menuConfig[m].forEach(x => { var o=document.createElement('option'); o.value=x; o.innerText=x; s.appendChild(o); }); }
+    function admUpdMin(){ var m=document.getElementById('adm-maj').value, s=document.getElementById('adm-min'); s.innerHTML="<option value='全部'>全部公堂</option>"; if(m !== '全部' && menuConfig[m]) { menuConfig[m].forEach(x => { var o=document.createElement('option'); o.value=x; o.innerText=x; s.appendChild(o); }); } }
+    function toggleAuth(t){ document.getElementById('f-login').style.display=t=='login'?'block':'none'; document.getElementById('f-reg').style.display=t=='register'?'block':'none'; }
+    function nav(t){ ['home','orchard','logs','profile','admin','crm'].forEach(x=>{ document.getElementById('v-'+x).classList.remove('active'); document.getElementById('n-'+x).classList.remove('active'); }); document.getElementById('v-'+t).classList.add('active'); document.getElementById('n-'+t).classList.add('active'); }
+    function closeModal() { document.getElementById('modal-overlay').style.display = 'none'; }
+    function toggleAdmDateInput() { var mode = document.getElementById('adm-mode').value; document.getElementById('adm-date-box').style.display = mode==='date' ? 'block' : 'none'; document.getElementById('adm-month-box').style.display = mode==='month' ? 'block' : 'none'; }
+    function doReg(){ var u=document.getElementById('r-u').value, p=document.getElementById('r-p').value, maj=document.getElementById('r-maj').value, min=document.getElementById('r-min').value; if(!u||!p||!maj||!min){ alert("請填寫完整"); return; } loading(true); callApi('register', {u:u, p:p, maj:maj, min:min}).then(r => { loading(false); alert(r.msg); if(r.success) toggleAuth('login'); }); }
+    function doLogin(){ var u=document.getElementById('l-u').value, p=document.getElementById('l-p').value; loading(true); callApi('login', {u:u, p:p}).then(r => { loading(false); if(r.success){ gUser=u; gPass=p; gData=r.gameData; localStorage.setItem("xd_u",u); localStorage.setItem("xd_p",p); lastLogTime = new Date().getTime(); if(gData.teamMajor === "主領班") { document.getElementById('n-admin').style.display = 'block'; } enterGame(); } else { alert(r.msg); } }); }
+    function enterGame(){ document.getElementById('auth-screen').style.display='none'; document.getElementById('game-screen').style.display='flex'; renderUI(); }
+    function logout(){ if(confirm("登出?")){ localStorage.removeItem("xd_p"); location.reload(); } }
+    function renderUI(){ document.getElementById('ui-team').innerText = gData.teamFull; document.getElementById('p-job').innerText = gData.job; updateDashboard(); var ck = document.getElementById('ck-sport'); if(gData.task_sport_done){ ck.style.background='var(--primary)'; ck.style.borderColor='var(--primary)'; } else { ck.style.background='transparent'; ck.style.borderColor='#ddd'; } updTimer(gData.task_read_time||0); }
+    function addCount(id) { var el = document.getElementById(id); el.value = parseInt(el.value || 0) + 1; updateDashboard(); }
+    function minusCount(id) { var el = document.getElementById(id); var val = parseInt(el.value || 0); if (val > 0) { el.value = val - 1; updateDashboard(); } }
+    function updateDashboard() { var addS = parseInt(document.getElementById('inp-spoke').value||0); var addC = parseInt(document.getElementById('inp-conv').value||0); var addCl = parseInt(document.getElementById('inp-class').value||0); var totalS = (gData.spoke_count||0) + addS; var totalC = (gData.convert_count||0) + addC; var totalCl = (gData.class_count||0) + addCl; document.getElementById('today-dash').innerText = `📊 今日已累積：開口 ${totalS} | 渡眾 ${totalC} | 入班 ${totalCl}`; }
+    function toggleTimer(){ var b = document.getElementById('btn-timer'); if(isTimer){ clearInterval(timerInt); isTimer=false; b.innerText="繼續計時"; b.className="btn btn-primary"; saveData({action:"讀書", detail:"累計 "+Math.floor(gData.task_read_time/60)+" 分鐘"}); } else { timerInt = setInterval(function(){ gData.task_read_time=(gData.task_read_time||0)+1; updTimer(gData.task_read_time); }, 1000); isTimer=true; b.innerText="暫停計時"; b.className="btn btn-warn"; } }
+    function updTimer(s){ var m=Math.floor(s/60), sec=s%60; document.getElementById('timer-display').innerText = (m<10?"0"+m:m)+":"+(sec<10?"0"+sec:sec); }
+    function toggleSport(){ if(gData.task_sport_done) return; gData.task_sport_done = true; renderUI(); saveData({action:"運動", detail:"完成今日30分鐘運動！"}); }
+    function saveAchievements(){ var addS = parseInt(document.getElementById('inp-spoke').value||0); var addC = parseInt(document.getElementById('inp-conv').value||0); var addCl = parseInt(document.getElementById('inp-class').value||0); if(addS==0 && addC==0 && addCl==0) { alert("請輸入數量"); return; } gData.spoke_count = (gData.spoke_count||0) + addS; gData.convert_count = (gData.convert_count||0) + addC; gData.class_count = (gData.class_count||0) + addCl; loading(true); var msg = `開口${addS}, 渡眾${addC}, 入班${addCl}`; callApi('saveGameData', {u:gUser, p:gPass, data:gData, log:{action:"回報成果", detail: msg}}).then(r => { loading(false); document.getElementById('inp-spoke').value=0; document.getElementById('inp-conv').value=0; document.getElementById('inp-class').value=0; renderUI(); alert("📜 紀錄已同步！"); }); }
+    function saveData(logObj){ callApi('saveGameData', {u:gUser, p:gPass, data:gData, log:logObj}); }
+    function setLocalReminder() { var t = document.getElementById('reminder-time').value; localStorage.setItem("reminder_time", t); if('Notification' in window) Notification.requestPermission(); alert("提醒時間已設定為 " + t); }
+    function changeMonth(delta) { curMonth += delta; if(curMonth > 12) { curMonth = 1; curYear++; } if(curMonth < 1) { curMonth = 12; curYear--; } loadCalendar(); }
+    function loadCalendar() { var mStr = curYear + "-" + (curMonth<10?"0"+curMonth:curMonth); document.getElementById('cal-title').innerText = mStr; document.getElementById('calendar-area').innerHTML = "Loading..."; document.getElementById('profile-stats').innerHTML = ""; document.getElementById('profile-log-list').innerHTML = ""; callApi('getCalendarData', {u:gUser, year:curYear, month:curMonth}).then(res => { var daysInMonth = new Date(curYear, curMonth, 0).getDate(); var html = ""; for(var d=1; d<=daysInMonth; d++) { var dStr = mStr + "-" + (d<10?"0"+d:d); var dayData = res.cal[dStr]; var cls = "cal-day"; if(dayData) { var count = 0; if(dayData.read) count++; if(dayData.sport) count++; if(dayData.achieve) count++; if(count > 0) cls += " cal-fill-" + count; } html += `<div class="${cls}">${d}</div>`; } document.getElementById('calendar-area').innerHTML = html; var s = res.stats; document.getElementById('profile-stats').innerHTML = `<b>📊 ${mStr} 月報表</b><br>運動: ${s.sportDays}天 | 讀書: ${s.readDays}天 | 開口: ${s.totalSpoke}`; var logHtml = ""; res.logs.forEach(l => { logHtml += `<div class="log-item"><div class="log-time" style="width:80px;">${l.time}</div><div class="log-content"><b>${l.action}</b> ${l.detail}</div></div>`; }); document.getElementById('profile-log-list').innerHTML = logHtml || "無紀錄"; }); }
+    function loadOrchard(){ document.getElementById('orchard-container').innerHTML = 'Loading...'; callApi('getOrchardData').then(data => { var html = ""; for(var key in data){ var h = data[key]; var fruits = ""; var sp = Number(h.spoke)||0; var cv = Number(h.convert)||0; var cl = Number(h.joinClass)||0; var redFruits = Math.floor(sp / 10); var totalPoints = redFruits + cv + cl; var treeClass = "tree-scale-s"; if(totalPoints > 20) treeClass = "tree-scale-l"; else if(totalPoints > 5) treeClass = "tree-scale-m"; for(var i=0; i<redFruits && i<10; i++) fruits += '<div class="fruit red"></div>'; for(var i=0; i<cv && i<10; i++) fruits += '<div class="fruit gold"></div>'; for(var i=0; i<cl && i<10; i++) fruits += '<div class="fruit blue"></div>'; if(totalPoints == 0) fruits = '<span style="font-size:10px; color:#fff;">種子</span>'; var info = `開口:${sp} 渡眾:${cv} 入班:${cl}`; html += `<div class="tree-container ${treeClass}" onclick="openHallModal('${h.name}', '${info}')"><div class="tree-canopy">${fruits}</div><div class="tree-trunk"></div><div class="tree-label">${h.name}<br><span style="font-size:10px;">${h.members}人</span></div></div>`; } document.getElementById('orchard-container').innerHTML = html || "無資料"; }); }
+    function openHallModal(name, info) { document.getElementById('modal-overlay').style.display = 'flex'; document.getElementById('modal-title').innerText = name; document.getElementById('modal-content').innerHTML = `<div style="background:#f1f8e9; padding:10px; border-radius:10px; margin-bottom:10px;"><b>📊 公堂總成績</b><br>${info}</div><div id="hall-members">成員載入中...</div>`; callApi('getHallDetails', {hall:name}).then(res => { var h = ""; res.list.forEach(m => { h += `<div class="member-row"><span>${m.name}</span><span>開${m.s}/渡${m.c}/班${m.cl}</span></div>`; }); document.getElementById('hall-members').innerHTML = h; }); }
+    function updateMarquee() { var msg = document.getElementById('adm-marquee').value; if(!msg) return; callApi('updateMarquee', {msg:msg}).then(r => { alert(r.msg); document.getElementById('marquee-text').innerText = msg; }); }
+    function loadAdminFilters() { if(Object.keys(menuConfig).length > 0) { initMaj(); } else { callApi('getConfig').then(cfg => { menuConfig = cfg.menu; initMaj(); }); } } 
+    function runAdminQuery() { try { if(Object.keys(menuConfig).length === 0) { alert("系統資料載入中，請稍後再試..."); return; } var filters = { major: document.getElementById('adm-maj').value, minor: document.getElementById('adm-min').value, hasSport: document.getElementById('f-sport').checked, hasRead: document.getElementById('f-read').checked, hasSpoke: document.getElementById('f-spoke').checked, hasConv: document.getElementById('f-conv').checked, hasClass: document.getElementById('f-class').checked }; var mode = document.getElementById('adm-mode').value; var dateVal = ""; if(mode === 'date') dateVal = document.getElementById('adm-date').value; if(mode === 'month') dateVal = document.getElementById('adm-month').value; loading(true); callApi('getAdminReport', {filters:filters, mode:mode, dateVal:dateVal}).then(res => { loading(false); if(res.error) { alert("系統錯誤: " + res.error); return; } if(!res.list || res.list.length === 0) { document.getElementById('admin-report').style.display = 'block'; document.getElementById('admin-report').innerHTML = "<div style='text-align:center; color:#666; padding:10px;'>⚠️ 查無符合條件的資料</div>"; document.getElementById('admin-list').innerHTML = ""; return; } var st = res.stats; var repHtml = `<div><b>[${mode === 'all' ? '全部歷史' : dateVal}]</b></div><div>篩選人數: <b>${st.count}</b></div><div>累計開口: ${st.totalSpoke} | 渡眾: ${st.totalConv} | 入班: ${st.totalClass}</div><div>運動人次: ${st.totalSport}</div>`; document.getElementById('admin-report').innerHTML = repHtml; document.getElementById('admin-report').style.display = 'block'; var listHtml = ""; res.list.forEach(function(u){ var badges = ""; if(u.sportCount > 0) badges += `<span style='background:#8bc34a'>運${u.sportCount}</span>`; if(u.readCount > 0) badges += `<span style='background:#81d4fa'>讀${u.readCount}</span>`; if(u.spoke > 0) badges += `<span style='background:#ff8a80'>開${u.spoke}</span>`; if(u.conv > 0) badges += `<span style='background:#ffd54f'>渡${u.conv}</span>`; listHtml += `<div class="admin-row"><div style="flex:1"><div style="font-weight:bold;">${u.name}</div><div style="font-size:10px; color:#999;">${u.minor}</div></div><div class="admin-stat-badges" style="text-align:right;">${badges}</div></div>`; }); document.getElementById('admin-list').innerHTML = listHtml; }).catch(err => { loading(false); alert("連線失敗: " + err); }); } catch(e) { loading(false); alert("前端錯誤: " + e.message); } }
+    function sendBroadcast() { var msg = document.getElementById('broadcast-msg').value; if (!msg) { alert("請輸入訊息內容"); return; } var time = document.getElementById('broadcast-time').value; if(confirm("確定要發送這則通知給所有人嗎？")) { loading(true); callApi('broadcast', {msg: msg, time: time}).then(res => { loading(false); if (res.success) { alert("發送成功"); document.getElementById('broadcast-msg').value = ""; } else { alert("發送失敗: " + res.msg); } }); } }
+    function loadGlobalLogs(){ var c = document.getElementById('log-container'); c.innerHTML = '<div style="padding:20px; text-align:center;">讀取中...</div>'; callApi('getGlobalLogs').then(res => { var h = ""; if(res.list.length==0) h='<div style="padding:20px; text-align:center;">尚無紀錄</div>'; res.list.forEach(function(l){ var color = "#eee"; if(l.action.includes("運動")) color="#e8f5e9"; if(l.action.includes("讀書")) color="#e3f2fd"; if(l.action.includes("回報")) color="#fff3e0"; h += `<div class="log-item"><div class="log-time">${l.time}</div><div class="log-content"><span style="font-weight:bold; color:#555;">${l.user}</span> <span class="log-tag" style="background:${color}">${l.action}</span><span>${l.detail}</span><div style="font-size:9px; color:#bbb;">(${l.hall})</div></div></div>`; }); c.innerHTML = h; }); }
+  </script>
+</body>
+</html>
