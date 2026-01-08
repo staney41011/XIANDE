@@ -10,7 +10,7 @@
   <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
   <script>
     // 🔴 版本更新
-    const APP_VERSION = "20250104-FixCheckbox-V1"; 
+    const APP_VERSION = "20250104-RevertPush-V1"; 
 
     (function checkUpdate() {
       const savedVersion = localStorage.getItem("app_version");
@@ -40,12 +40,12 @@
         serviceWorkerPath: "OneSignalSDKWorker.js",
         serviceWorkerParam: { scope: "/XIANDE/" }
       });
-      OneSignal.User.addTag("notify", "instant");
+      // 這裡不需要再 addTag 了，因為我們改成全體廣播
     });
   </script>
 
   <style>
-    /* CSS 樣式 */
+    /* CSS 樣式 (保持原本) */
     :root { --bg-color: #fdfbf7; --card-bg: #ffffff; --primary: #8bc34a; --accent: #ffb74d; --blue: #81d4fa; --red: #ff8a80; --text: #5d5d5d; --shadow: 0 4px 12px rgba(0,0,0,0.08); }
     * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
     body { font-family: 'Varela Round', sans-serif; background: var(--bg-color); color: var(--text); margin: 0; height: 100vh; display: flex; flex-direction: column; overflow: hidden;}
@@ -122,13 +122,6 @@
     .spinner { width: 30px; height: 30px; border: 4px solid #f3f3f3; border-top: 4px solid var(--primary); border-radius: 50%; animation: spin 1s linear infinite; }
     @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     
-    .switch { position: relative; display: inline-block; width: 40px; height: 20px; }
-    .switch input { opacity: 0; width: 0; height: 0; }
-    .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 20px; }
-    .slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 2px; bottom: 2px; background-color: white; transition: .4s; border-radius: 50%; }
-    input:checked + .slider { background-color: var(--primary); }
-    input:checked + .slider:before { transform: translateX(20px); }
-    
     .profile-stats { margin-top: 15px; border-top: 1px dashed #eee; padding-top: 10px; font-size: 12px; line-height: 1.8; color: #555; }
     .profile-logs { margin-top: 15px; border-top: 1px dashed #eee; padding-top: 10px; font-size: 12px; }
     .profile-logs h5 { margin: 0 0 10px 0; color: #666; }
@@ -136,11 +129,10 @@
     .admin-stat-badges span { padding:2px 5px; border-radius:4px; font-size:10px; margin-left:3px; color:#fff;}
     .member-row { display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid #eee; font-size:12px; }
 
-    /* 🔴 新增：勾選框樣式 */
+    /* 勾選框樣式 */
     .filter-group { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:10px; }
     .filter-label { padding: 8px 12px; background: #fff; border: 1px solid #ddd; border-radius: 20px; font-size: 12px; cursor: pointer; color: #666; transition: all 0.2s; user-select: none; display: flex; align-items: center; }
-    .filter-label input { margin-right: 5px; } /* 顯示原生的 checkbox 避免複雜，或用之前的 hidden 方案 */
-    /* 讓勾選狀態更明顯 */
+    .filter-label input { margin-right: 5px; }
     .filter-label:has(input:checked) { background: var(--primary); color: #fff; border-color: var(--primary); }
   </style>
 </head>
@@ -256,19 +248,10 @@
 
       <div id="v-profile" class="view-section">
         <div class="card" style="text-align:center;">
-           <div class="help-btn" onclick="alert('這裡設定您的推播偏好。\n關閉即時通知會改為晚上9點收到日報。')">?</div>
+           <div class="help-btn" onclick="alert('點擊「登出」可切換帳號。')">?</div>
            <div style="font-size:40px;">🧑‍🌾</div>
            <h3 id="p-job">修道志士</h3>
            
-           <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px dashed #eee; padding-top:10px; margin-top:10px;">
-             <span>🔔 接收即時通知</span>
-             <label class="switch">
-               <input type="checkbox" id="notify-switch" checked onchange="toggleNotifyPref()">
-               <span class="slider"></span>
-             </label>
-           </div>
-           <div style="margin-top:5px; font-size:10px; color:#999; text-align:left;">若關閉，將改為每日 21:00 收到團隊總覽。</div>
-
            <div style="margin-top:15px; text-align:left;">
              <label style="font-size:12px;">⏰ 設定「記得上線」提醒：</label>
              <input type="time" id="reminder-time" class="input-field" onchange="setLocalReminder()">
@@ -291,9 +274,10 @@
 
       <div id="v-admin" class="view-section">
          <div class="card">
-           <h3>📊 主領班</h3>
+           <h3>📊 渡眾記事本 (主領班)</h3>
+           <button class="btn" style="background:#fff3e0; color:#d84315; border:1px solid #ffcc80; margin-bottom:15px;" onclick="alert('🚧 渡眾記事本功能即將上線！\n屆時您可以在此管理名單與進度。')">📒 進入渡眾記事本</button>
            
-           <div style="background:#fff3e0; padding:10px; border-radius:10px; margin-bottom:15px;">
+           <div style="background:#e3f2fd; padding:10px; border-radius:10px; margin-bottom:15px;">
               <div style="font-size:12px; font-weight:bold; margin-bottom:5px;">📢 更新上方跑馬燈</div>
               <input id="adm-marquee" class="input-field" placeholder="輸入公告內容...">
               <button class="btn btn-warn" style="font-size:12px; padding:8px;" onclick="updateMarquee()">更新公告</button>
@@ -503,8 +487,6 @@
       document.getElementById('auth-screen').style.display='none';
       document.getElementById('game-screen').style.display='flex';
       renderUI();
-      var notifyPref = localStorage.getItem("notify_pref") || "on";
-      document.getElementById('notify-switch').checked = (notifyPref === "on");
     }
     function logout(){ if(confirm("登出?")){ localStorage.removeItem("xd_p"); location.reload(); } }
 
@@ -588,19 +570,6 @@
       });
     }
     function saveData(logObj){ callApi('saveGameData', {u:gUser, p:gPass, data:gData, log:logObj}); }
-
-    // --- Profile & Notification ---
-    function toggleNotifyPref() {
-      var isOn = document.getElementById('notify-switch').checked;
-      var tagVal = isOn ? "instant" : "daily";
-      
-      if(window.OneSignalDeferred) {
-        OneSignalDeferred.push(function(OneSignal) {
-           OneSignal.User.addTag("notify", tagVal);
-        });
-      }
-      localStorage.setItem("notify_pref", isOn ? "on" : "off");
-    }
 
     function setLocalReminder() {
        var t = document.getElementById('reminder-time').value;
@@ -735,12 +704,8 @@
         callApi('getAdminReport', {filters:filters, mode:mode, dateVal:dateVal}).then(res => {
           loading(false);
           
-          if(res.error) {
-             alert("系統錯誤: " + res.error);
-             return;
-          }
+          if(res.error) { alert("系統錯誤: " + res.error); return; }
 
-          // 顯示查無資料的提示
           if(!res.list || res.list.length === 0) { 
              document.getElementById('admin-report').style.display = 'block';
              document.getElementById('admin-report').innerHTML = "<div style='text-align:center; color:#666; padding:10px;'>⚠️ 查無符合條件的資料</div>";
