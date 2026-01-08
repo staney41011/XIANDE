@@ -443,20 +443,35 @@
     function toggleAdmDateInput() { var mode = document.getElementById('adm-mode').value; document.getElementById('adm-date-box').style.display = mode==='date' ? 'block' : 'none'; document.getElementById('adm-month-box').style.display = mode==='month' ? 'block' : 'none'; }
     function doReg(){ var u=document.getElementById('r-u').value, p=document.getElementById('r-p').value, maj=document.getElementById('r-maj').value, min=document.getElementById('r-min').value; if(!u||!p||!maj||!min){ alert("請填寫完整"); return; } loading(true); callApi('register', {u:u, p:p, maj:maj, min:min}).then(r => { loading(false); alert(r.msg); if(r.success) toggleAuth('login'); }); }
     function doLogin(){ 
-       var u=document.getElementById('l-u').value, p=document.getElementById('l-p').value; 
+       var u = document.getElementById('l-u').value;
+       var p = document.getElementById('l-p').value; 
        loading(true); 
+       
        callApi('login', {u:u, p:p}).then(r => { 
           loading(false); 
           if(r.success){ 
-             gUser=u; gPass=p; gData=r.gameData; 
-             localStorage.setItem("xd_u",u); localStorage.setItem("xd_p",p); 
-             // 🔴 關鍵：登入時綁定 Tag，讓後端知道是誰
-             if(window.OneSignal) OneSignal.User.addTag("user", u);
+             gUser = u; 
+             gPass = p; 
+             gData = r.gameData; 
+             
+             localStorage.setItem("xd_u", u); 
+             localStorage.setItem("xd_p", p); 
+             
+             // 🔴 修正：使用 Deferred 確保 OneSignal 載入後才執行 Tag
+             window.OneSignalDeferred = window.OneSignalDeferred || [];
+             window.OneSignalDeferred.push(function(OneSignal) {
+                 OneSignal.User.addTag("user", u);
+                 console.log("✅ [OneSignal] Tag 已設定為: " + u);
+             });
              
              lastLogTime = new Date().getTime(); 
-             if(gData.teamMajor === "主領班") { document.getElementById('n-admin').style.display = 'block'; } 
+             if(gData.teamMajor === "主領班") { 
+                 document.getElementById('n-admin').style.display = 'block'; 
+             } 
              enterGame(); 
-          } else { alert(r.msg); } 
+          } else { 
+             alert(r.msg); 
+          } 
        }); 
     }
     function enterGame(){ document.getElementById('auth-screen').style.display='none'; document.getElementById('game-screen').style.display='flex'; renderUI(); }
