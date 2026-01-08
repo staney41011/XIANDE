@@ -9,7 +9,7 @@
   
   <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
   <script>
-    const APP_VERSION = "20260108-Sticky-V1"; 
+    const APP_VERSION = "20260108-WeekDay-V1"; 
 
     (function checkUpdate() {
       const savedVersion = localStorage.getItem("app_version");
@@ -132,7 +132,7 @@
     .crm-note { font-size: 12px; color: #888; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .fab { position: fixed; bottom: 80px; right: 20px; width: 50px; height: 50px; background: var(--accent); color: #fff; border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 24px; box-shadow: 0 4px 10px rgba(0,0,0,0.2); cursor: pointer; z-index: 500; }
     
-    /* 🔴 行事曆樣式 (Sticky Update) */
+    /* 🔴 行事曆樣式 (Sticky Filters) */
     .sticky-filters {
        position: -webkit-sticky; /* Safari */
        position: sticky;
@@ -146,7 +146,7 @@
        border-bottom: 1px solid rgba(0,0,0,0.05); /* 輕微底線區隔 */
     }
 
-    .scroll-x { display: flex; overflow-x: auto; white-space: nowrap; gap: 8px; /* 移除 padding-bottom，改由父層控制 */ }
+    .scroll-x { display: flex; overflow-x: auto; white-space: nowrap; gap: 8px; }
     .chip { padding: 6px 12px; border-radius: 16px; background: #eee; color: #666; font-size: 12px; cursor: pointer; transition: 0.2s; border: 1px solid #ddd; }
     .chip.active { background: var(--primary); color: #fff; font-weight: bold; border-color: var(--primary); }
     
@@ -436,6 +436,8 @@
        var hasScrolled = false;
        var historyAdded = false;
        
+       var weekDays = ["日", "一", "二", "三", "四", "五", "六"]; // 🔴 週幾對照表
+
        allEvents.forEach((e, index) => {
           if(activeFilters.length > 0 && !activeFilters.includes(e.cat)) return;
           
@@ -451,6 +453,7 @@
           
           var day = dStart.getDate();
           var mon = dStart.getMonth() + 1;
+          var weekStr = weekDays[dStart.getDay()]; // 🔴 取得週幾
           var dateRangeStr = "";
           
           if(e.date !== e.end) {
@@ -483,6 +486,7 @@
              <div class="event-date-box" style="border-left: 5px solid ${getTagColor(e.cat)}">
                 <div class="event-month">${mon}月</div>
                 <div class="event-day" style="font-size:${day.toString().length>2?'14px':'18px'}">${day}</div>
+                <div style="font-size:10px; margin-top:-2px;">週${weekStr}</div>
              </div>
              <div class="event-info">
                 <div class="event-title">${e.name}</div>
@@ -660,38 +664,7 @@
     function setLocalReminder() { var t = document.getElementById('reminder-time').value; localStorage.setItem("reminder_time", t); if('Notification' in window) Notification.requestPermission(); alert("提醒時間已設定為 " + t); }
     function changeMonth(delta) { curMonth += delta; if(curMonth > 12) { curMonth = 1; curYear++; } if(curMonth < 1) { curMonth = 12; curYear--; } loadCalendar(); }
     function loadCalendar() { var mStr = curYear + "-" + (curMonth<10?"0"+curMonth:curMonth); document.getElementById('cal-title').innerText = mStr; document.getElementById('calendar-area').innerHTML = "Loading..."; document.getElementById('profile-stats').innerHTML = ""; document.getElementById('profile-log-list').innerHTML = ""; callApi('getCalendarData', {u:gUser, year:curYear, month:curMonth}).then(res => { var daysInMonth = new Date(curYear, curMonth, 0).getDate(); var html = ""; for(var d=1; d<=daysInMonth; d++) { var dStr = mStr + "-" + (d<10?"0"+d:d); var dayData = res.cal[dStr]; var cls = "cal-day"; if(dayData) { var count = 0; if(dayData.read) count++; if(dayData.sport) count++; if(dayData.achieve) count++; if(count > 0) cls += " cal-fill-" + count; } html += `<div class="${cls}">${d}</div>`; } document.getElementById('calendar-area').innerHTML = html; var s = res.stats; document.getElementById('profile-stats').innerHTML = `<b>📊 ${mStr} 月報表</b><br>運動: ${s.sportDays}天 | 讀書: ${s.readDays}天 | 開口: ${s.totalSpoke}`; var logHtml = res.logs.map(l => `<div class="log-item"><div class="log-time" style="width:80px;">${l.time}</div><div class="log-content"><b>${l.action}</b> ${l.detail}</div></div>`).join(''); document.getElementById('profile-log-list').innerHTML = logHtml || "無紀錄"; }); }
-    
-    // Orchard (整合版)
-    function loadOrchard(){ 
-      document.getElementById('orchard-container').innerHTML = 'Loading...'; 
-      document.getElementById('log-container').innerHTML = 'Loading Logs...';
-      callApi('getOrchardData').then(data => { 
-        var html = ""; 
-        var totalSpoke = 0, totalConv = 0, totalClass = 0;
-        for(var key in data){ 
-          var h = data[key]; 
-          var s = Number(h.spoke)||0; var c = Number(h.convert)||0; var cl = Number(h.joinClass)||0;
-          totalSpoke += s; totalConv += c; totalClass += cl;
-          var fruits = ""; 
-          var redFruits = Math.floor(s / 10); 
-          var totalPoints = redFruits + c + cl; 
-          var treeClass = "tree-scale-s"; 
-          if(totalPoints > 20) treeClass = "tree-scale-l"; else if(totalPoints > 5) treeClass = "tree-scale-m"; 
-          for(var i=0; i<redFruits && i<10; i++) fruits += '<div class="fruit red"></div>'; 
-          for(var i=0; i<c && i<10; i++) fruits += '<div class="fruit gold"></div>'; 
-          for(var i=0; i<cl && i<10; i++) fruits += '<div class="fruit blue"></div>'; 
-          if(totalPoints == 0) fruits = '<span style="font-size:10px; color:#fff;">種子</span>'; 
-          var info = `開口:${s} 渡眾:${c} 入班:${cl}`; 
-          html += `<div class="tree-container ${treeClass}" onclick="openHallModal('${h.name}', '${info}')"><div class="tree-canopy">${fruits}</div><div class="tree-trunk"></div><div class="tree-label">${h.name}<br><span style="font-size:10px;">${h.members}人</span></div></div>`; 
-        } 
-        document.getElementById('dash-spoke').innerText = totalSpoke;
-        document.getElementById('dash-conv').innerText = totalConv;
-        document.getElementById('dash-class').innerText = totalClass;
-        document.getElementById('orchard-container').innerHTML = html || "無資料"; 
-        loadGlobalLogs();
-      }); 
-    }
-    
+    function loadOrchard(){ document.getElementById('orchard-container').innerHTML = 'Loading...'; callApi('getOrchardData').then(data => { var html = ""; for(var key in data){ var h = data[key]; var fruits = ""; var sp = Number(h.spoke)||0; var cv = Number(h.convert)||0; var cl = Number(h.joinClass)||0; var redFruits = Math.floor(sp / 10); var totalPoints = redFruits + cv + cl; var treeClass = "tree-scale-s"; if(totalPoints > 20) treeClass = "tree-scale-l"; else if(totalPoints > 5) treeClass = "tree-scale-m"; for(var i=0; i<redFruits && i<10; i++) fruits += '<div class="fruit red"></div>'; for(var i=0; i<cv && i<10; i++) fruits += '<div class="fruit gold"></div>'; for(var i=0; i<cl && i<10; i++) fruits += '<div class="fruit blue"></div>'; if(totalPoints == 0) fruits = '<span style="font-size:10px; color:#fff;">種子</span>'; var info = `開口:${sp} 渡眾:${cv} 入班:${cl}`; html += `<div class="tree-container ${treeClass}" onclick="openHallModal('${h.name}', '${info}')"><div class="tree-canopy">${fruits}</div><div class="tree-trunk"></div><div class="tree-label">${h.name}<br><span style="font-size:10px;">${h.members}人</span></div></div>`; } document.getElementById('orchard-container').innerHTML = html || "無資料"; }); }
     function openHallModal(name, info) { document.getElementById('modal-overlay').style.display = 'flex'; document.getElementById('modal-title').innerText = name; document.getElementById('modal-content').innerHTML = `<div style="background:#f1f8e9; padding:10px; border-radius:10px; margin-bottom:10px;"><b>📊 公堂總成績</b><br>${info}</div><div id="hall-members">成員載入中...</div>`; callApi('getHallDetails', {hall:name}).then(res => { var h = res.list.map(m => `<div class="member-row"><span>${m.name}</span><span>開${m.s}/渡${m.c}/班${m.cl}</span></div>`).join(''); document.getElementById('hall-members').innerHTML = h; }); }
     function updateMarquee() { var msg = document.getElementById('adm-marquee').value; if(!msg) return; callApi('updateMarquee', {msg:msg}).then(r => { alert(r.msg); document.getElementById('marquee-text').innerText = msg; }); }
     function loadAdminFilters() { if(Object.keys(menuConfig).length > 0) { initMaj(); } else { callApi('getConfig').then(cfg => { menuConfig = cfg.menu; initMaj(); }); } } 
