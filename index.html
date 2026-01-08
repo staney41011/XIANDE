@@ -9,7 +9,7 @@
   
   <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
   <script>
-    const APP_VERSION = "20260108-OrchardDash-V1"; 
+    const APP_VERSION = "20260108-Sticky-V1"; 
 
     (function checkUpdate() {
       const savedVersion = localStorage.getItem("app_version");
@@ -35,7 +35,7 @@
   </script>
 
   <style>
-    /* 全域設定 */
+    /* CSS 樣式 */
     :root { --bg-color: #fdfbf7; --card-bg: #ffffff; --primary: #8bc34a; --accent: #ffb74d; --blue: #81d4fa; --red: #ff8a80; --text: #5d5d5d; --shadow: 0 4px 12px rgba(0,0,0,0.08); }
     * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
     body { font-family: 'Varela Round', sans-serif; background: var(--bg-color); color: var(--text); margin: 0; height: 100vh; display: flex; flex-direction: column; overflow: hidden;}
@@ -132,8 +132,21 @@
     .crm-note { font-size: 12px; color: #888; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .fab { position: fixed; bottom: 80px; right: 20px; width: 50px; height: 50px; background: var(--accent); color: #fff; border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 24px; box-shadow: 0 4px 10px rgba(0,0,0,0.2); cursor: pointer; z-index: 500; }
     
-    /* 行事曆樣式 */
-    .scroll-x { display: flex; overflow-x: auto; white-space: nowrap; padding-bottom: 10px; gap: 8px; }
+    /* 🔴 行事曆樣式 (Sticky Update) */
+    .sticky-filters {
+       position: -webkit-sticky; /* Safari */
+       position: sticky;
+       top: 0;
+       z-index: 900;
+       background: var(--bg-color); /* 背景色，防止透明穿透 */
+       padding: 10px 0;
+       margin: 0 -15px; /* 負邊距以填滿左右 */
+       padding-left: 15px; /* 補回內距 */
+       padding-right: 15px;
+       border-bottom: 1px solid rgba(0,0,0,0.05); /* 輕微底線區隔 */
+    }
+
+    .scroll-x { display: flex; overflow-x: auto; white-space: nowrap; gap: 8px; /* 移除 padding-bottom，改由父層控制 */ }
     .chip { padding: 6px 12px; border-radius: 16px; background: #eee; color: #666; font-size: 12px; cursor: pointer; transition: 0.2s; border: 1px solid #ddd; }
     .chip.active { background: var(--primary); color: #fff; font-weight: bold; border-color: var(--primary); }
     
@@ -246,7 +259,9 @@
 
       <div id="v-events" class="view-section">
          <div style="padding: 0 10px;">
-            <div id="event-filters" class="scroll-x"></div>
+            <div class="sticky-filters">
+               <div id="event-filters" class="scroll-x"></div>
+            </div>
             <div id="event-list" style="margin-top:10px;">
                <div style="text-align:center; padding:20px; color:#ccc;">載入中...</div>
             </div>
@@ -316,7 +331,7 @@
     const API_URL = "https://script.google.com/macros/s/AKfycbxHe88NVoiJkAt2pvBnCYUk_xGul1FhXTAj0kyAXA9GEIddXB1AD8j4gtjhbDEASPSr/exec";
     var gUser=null, gPass=null, gData={}, menuConfig={}, crmData=[];
     var allEvents = [];
-    var activeFilters = []; // 🔴 儲存複選的篩選條件
+    var activeFilters = [];
     var timerInt=null, isTimer=false;
     var curYear = new Date().getFullYear(), curMonth = new Date().getMonth() + 1;
 
@@ -362,7 +377,7 @@
     }
     function loading(x){ document.getElementById('loading').style.display = x?'flex':'none'; }
 
-    // 🔴 Events Logic (Multi-select)
+    // 🔴 Events Logic (Sticky + Default Filter)
     function loadEvents() {
        document.getElementById('event-list').innerHTML = '<div style="text-align:center; padding:20px; color:#ccc;">載入中...</div>';
        callApi('getYearlyEvents').then(res => {
@@ -371,10 +386,8 @@
           allEvents = res.list || [];
           var cats = res.cats || [];
           
-          // 初始化篩選器
           initFilters();
 
-          // 渲染篩選按鈕
           var filterHtml = `<div class="chip ${activeFilters.length===0?'active':''}" onclick="toggleFilter('all', this)">全部</div>`;
           cats.forEach(c => { 
              var isActive = activeFilters.includes(c) ? 'active' : '';
@@ -387,13 +400,11 @@
     }
     
     function initFilters() {
-       // 如果是主領班 -> 預設全選 (activeFilters = [])
        if(gData.teamMajor === "主領班") {
           activeFilters = [];
        } else {
-          // 一般志士 -> 預設 中央 + 賢德
-          activeFilters = ["中央", "賢德"];
-          // 自動加入所屬團隊 (中賢/北賢/南賢)
+          // 🔴 預設加入：中央、賢德、仙佛紀念日
+          activeFilters = ["中央", "賢德", "仙佛紀念日"];
           if(gData.teamMajor && gData.teamMajor.includes("賢")) {
              activeFilters.push(gData.teamMajor);
           }
@@ -402,21 +413,16 @@
     
     function toggleFilter(cat, el) {
        if(cat === 'all') {
-          activeFilters = []; // 清空代表全選
-          // 重繪按鈕樣式
+          activeFilters = []; 
           var chips = document.querySelectorAll('.chip');
           chips.forEach(c => c.classList.remove('active'));
           el.classList.add('active');
        } else {
-          // 取消「全部」的樣式
           document.querySelector('.chip:first-child').classList.remove('active');
-          
           if(activeFilters.includes(cat)) {
-             // 移除
              activeFilters = activeFilters.filter(c => c !== cat);
              el.classList.remove('active');
           } else {
-             // 加入
              activeFilters.push(cat);
              el.classList.add('active');
           }
@@ -431,7 +437,6 @@
        var historyAdded = false;
        
        allEvents.forEach((e, index) => {
-          // 🔴 複選篩選邏輯：如果 activeFilters 不為空，且該活動分類不在其中 -> 跳過
           if(activeFilters.length > 0 && !activeFilters.includes(e.cat)) return;
           
           var dStart = new Date(e.date);
@@ -439,7 +444,6 @@
           var isPast = dEnd < today;
           var isTodayOrFuture = dEnd >= today;
           
-          // 歷史分隔線 (只在「全部顯示」或「篩選後第一筆未來活動」前顯示)
           if(!historyAdded && isTodayOrFuture && index > 0) {
              html += `<div class="history-line">以上是歷史活動</div>`;
              historyAdded = true;
@@ -454,7 +458,6 @@
              var dEndMon = dEnd.getMonth() + 1;
              dateRangeStr = `📅 ${mon}/${day} ~ ${dEndMon}/${dEndDay}`;
              day = `${day}-${dEndDay}`; 
-             // 跨日活動：倒數仍依據起始日
              var diffTime = dStart - today;
              var diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
              if(diffDays > 0) dateRangeStr += ` (還有${diffDays}天)`;
@@ -473,7 +476,6 @@
              hasScrolled = true;
           }
           
-          // 🔴 備註直接顯示
           var noteHtml = e.note ? `<div class="event-note">${e.note}</div>` : "";
           
           html += `
@@ -659,21 +661,17 @@
     function changeMonth(delta) { curMonth += delta; if(curMonth > 12) { curMonth = 1; curYear++; } if(curMonth < 1) { curMonth = 12; curYear--; } loadCalendar(); }
     function loadCalendar() { var mStr = curYear + "-" + (curMonth<10?"0"+curMonth:curMonth); document.getElementById('cal-title').innerText = mStr; document.getElementById('calendar-area').innerHTML = "Loading..."; document.getElementById('profile-stats').innerHTML = ""; document.getElementById('profile-log-list').innerHTML = ""; callApi('getCalendarData', {u:gUser, year:curYear, month:curMonth}).then(res => { var daysInMonth = new Date(curYear, curMonth, 0).getDate(); var html = ""; for(var d=1; d<=daysInMonth; d++) { var dStr = mStr + "-" + (d<10?"0"+d:d); var dayData = res.cal[dStr]; var cls = "cal-day"; if(dayData) { var count = 0; if(dayData.read) count++; if(dayData.sport) count++; if(dayData.achieve) count++; if(count > 0) cls += " cal-fill-" + count; } html += `<div class="${cls}">${d}</div>`; } document.getElementById('calendar-area').innerHTML = html; var s = res.stats; document.getElementById('profile-stats').innerHTML = `<b>📊 ${mStr} 月報表</b><br>運動: ${s.sportDays}天 | 讀書: ${s.readDays}天 | 開口: ${s.totalSpoke}`; var logHtml = res.logs.map(l => `<div class="log-item"><div class="log-time" style="width:80px;">${l.time}</div><div class="log-content"><b>${l.action}</b> ${l.detail}</div></div>`).join(''); document.getElementById('profile-log-list').innerHTML = logHtml || "無紀錄"; }); }
     
-    // 🔴 Orchard (整合版)
+    // Orchard (整合版)
     function loadOrchard(){ 
       document.getElementById('orchard-container').innerHTML = 'Loading...'; 
       document.getElementById('log-container').innerHTML = 'Loading Logs...';
-      
       callApi('getOrchardData').then(data => { 
         var html = ""; 
         var totalSpoke = 0, totalConv = 0, totalClass = 0;
-        
         for(var key in data){ 
           var h = data[key]; 
-          // 累加總數
           var s = Number(h.spoke)||0; var c = Number(h.convert)||0; var cl = Number(h.joinClass)||0;
           totalSpoke += s; totalConv += c; totalClass += cl;
-          
           var fruits = ""; 
           var redFruits = Math.floor(s / 10); 
           var totalPoints = redFruits + c + cl; 
@@ -686,15 +684,10 @@
           var info = `開口:${s} 渡眾:${c} 入班:${cl}`; 
           html += `<div class="tree-container ${treeClass}" onclick="openHallModal('${h.name}', '${info}')"><div class="tree-canopy">${fruits}</div><div class="tree-trunk"></div><div class="tree-label">${h.name}<br><span style="font-size:10px;">${h.members}人</span></div></div>`; 
         } 
-        
-        // 更新儀表板
         document.getElementById('dash-spoke').innerText = totalSpoke;
         document.getElementById('dash-conv').innerText = totalConv;
         document.getElementById('dash-class').innerText = totalClass;
-        
         document.getElementById('orchard-container').innerHTML = html || "無資料"; 
-        
-        // 載入下方歷程
         loadGlobalLogs();
       }); 
     }
