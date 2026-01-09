@@ -9,7 +9,7 @@
   
   <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
   <script>
-    const APP_VERSION = "20260109-FullRestore-V1"; 
+    const APP_VERSION = "20260109-DashboardFix-V1"; 
 
     (function checkUpdate() {
       const savedVersion = localStorage.getItem("app_version");
@@ -356,9 +356,7 @@
   </div>
 
   <script>
-    // 🔴 請務必確認這個網址是您的最新部署網址 (Web App URL)
     const API_URL = "https://script.google.com/macros/s/AKfycbxHe88NVoiJkAt2pvBnCYUk_xGul1FhXTAj0kyAXA9GEIddXB1AD8j4gtjhbDEASPSr/exec";
-    
     var gUser=null, gPass=null, gData={}, menuConfig={}, crmData=[];
     var allEvents = [], activeFilters = [], shareDataList = [];
     var cmsUploadFiles = []; 
@@ -586,8 +584,48 @@
     function saveData(logObj){ callApi('saveGameData', {u:gUser, p:gPass, data:gData, log:logObj}); }
     function setLocalReminder() { var t = document.getElementById('reminder-time').value; localStorage.setItem("reminder_time", t); if('Notification' in window) Notification.requestPermission(); alert("提醒時間已設定為 " + t); }
     function changeMonth(delta) { curMonth += delta; if(curMonth > 12) { curMonth = 1; curYear++; } if(curMonth < 1) { curMonth = 12; curYear--; } loadCalendar(); }
-    function loadCalendar() { var mStr = curYear + "-" + (curMonth<10?"0"+curMonth:curMonth); document.getElementById('cal-title').innerText = mStr; document.getElementById('calendar-area').innerHTML = "Loading..."; document.getElementById('profile-stats').innerHTML = ""; document.getElementById('profile-log-list').innerHTML = ""; callApi('getCalendarData', {u:gUser, year:curYear, month:curMonth}).then(res => { var daysInMonth = new Date(curYear, curMonth, 0).getDate(); var html = ""; for(var d=1; d<=daysInMonth; d++) { var dStr = mStr + "-" + (d<10?"0"+d:d); var dayData = res.cal[dStr]; var cls = "cal-day"; if(dayData) { var count = 0; if(dayData.read) count++; if(dayData.sport) count++; if(dayData.achieve) count++; if(count > 0) cls += " cal-fill-" + count; } html += `<div class="${cls}">${d}</div>`; } document.getElementById('calendar-area').innerHTML = html; var s = res.stats; document.getElementById('profile-stats').innerHTML = `<b>📊 ${mStr} 月報表</b><br>運動: ${s.sportDays}天 | 讀書: ${s.readDays}天 | 開口: ${s.totalSpoke}`; var logHtml = res.logs.map(l => `<div class="log-item"><div class="log-time" style="width:80px;">${l.time}</div><div class="log-content"><b>${l.action}</b> ${l.detail}</div></div>`).join(''); document.getElementById('profile-log-list').innerHTML = logHtml || "無紀錄"; }); }
-    function loadOrchard(){ document.getElementById('orchard-container').innerHTML = 'Loading...'; callApi('getOrchardData').then(data => { var html = ""; for(var key in data){ var h = data[key]; var fruits = ""; var sp = Number(h.spoke)||0; var cv = Number(h.convert)||0; var cl = Number(h.joinClass)||0; var redFruits = Math.floor(sp / 10); var totalPoints = redFruits + cv + cl; var treeClass = "tree-scale-s"; if(totalPoints > 20) treeClass = "tree-scale-l"; else if(totalPoints > 5) treeClass = "tree-scale-m"; for(var i=0; i<redFruits && i<10; i++) fruits += '<div class="fruit red"></div>'; for(var i=0; i<cv && i<10; i++) fruits += '<div class="fruit gold"></div>'; for(var i=0; i<cl && i<10; i++) fruits += '<div class="fruit blue"></div>'; if(totalPoints == 0) fruits = '<span style="font-size:10px; color:#fff;">種子</span>'; var info = `開口:${sp} 渡眾:${cv} 入班:${cl}`; html += `<div class="tree-container ${treeClass}" onclick="openHallModal('${h.name}', '${info}')"><div class="tree-canopy">${fruits}</div><div class="tree-trunk"></div><div class="tree-label">${h.name}<br><span style="font-size:10px;">${h.members}人</span></div></div>`; } document.getElementById('orchard-container').innerHTML = html || "無資料"; if(document.getElementById('dash-spoke')) { document.getElementById('dash-spoke').innerText = data.totalSpoke || 0; document.getElementById('dash-conv').innerText = data.totalConv || 0; document.getElementById('dash-class').innerText = data.totalClass || 0; } loadGlobalLogs(); }); }
+    
+    // 🔴 修復重點：確保在載入果園時，正確累加所有分組的數據
+    function loadOrchard(){ 
+      document.getElementById('orchard-container').innerHTML = 'Loading...'; 
+      callApi('getOrchardData').then(data => { 
+        var html = ""; 
+        var totalS = 0, totalC = 0, totalCl = 0; // 初始化總數
+
+        for(var key in data){ 
+          var h = data[key]; 
+          // 累加邏輯
+          var s = Number(h.spoke)||0; 
+          var c = Number(h.convert)||0; 
+          var cl = Number(h.joinClass)||0;
+          totalS += s; totalC += c; totalCl += cl;
+
+          var fruits = ""; 
+          var redFruits = Math.floor(s / 10); 
+          var totalPoints = redFruits + c + cl; 
+          var treeClass = "tree-scale-s"; 
+          if(totalPoints > 20) treeClass = "tree-scale-l"; else if(totalPoints > 5) treeClass = "tree-scale-m"; 
+          for(var i=0; i<redFruits && i<10; i++) fruits += '<div class="fruit red"></div>'; 
+          for(var i=0; i<c && i<10; i++) fruits += '<div class="fruit gold"></div>'; 
+          for(var i=0; i<cl && i<10; i++) fruits += '<div class="fruit blue"></div>'; 
+          if(totalPoints == 0) fruits = '<span style="font-size:10px; color:#fff;">種子</span>'; 
+          var info = `開口:${s} 渡眾:${c} 入班:${cl}`; 
+          html += `<div class="tree-container ${treeClass}" onclick="openHallModal('${h.name}', '${info}')"><div class="tree-canopy">${fruits}</div><div class="tree-trunk"></div><div class="tree-label">${h.name}<br><span style="font-size:10px;">${h.members}人</span></div></div>`; 
+        } 
+        
+        document.getElementById('orchard-container').innerHTML = html || "無資料"; 
+        
+        // 🔴 更新儀表板數字 (DOM 存在才更新)
+        if(document.getElementById('dash-spoke')) { 
+           document.getElementById('dash-spoke').innerText = totalS; 
+           document.getElementById('dash-conv').innerText = totalC; 
+           document.getElementById('dash-class').innerText = totalCl; 
+        } 
+        
+        loadGlobalLogs(); 
+      }); 
+    }
+    
     function openHallModal(name, info) { document.getElementById('modal-overlay').style.display = 'flex'; document.getElementById('modal-title').innerText = name; document.getElementById('modal-content').innerHTML = `<div style="background:#f1f8e9; padding:10px; border-radius:10px; margin-bottom:10px;"><b>📊 公堂總成績</b><br>${info}</div><div id="hall-members">成員載入中...</div>`; callApi('getHallDetails', {hall:name}).then(res => { var h = res.list.map(m => `<div class="member-row"><span>${m.name}</span><span>開${m.s}/渡${m.c}/班${m.cl}</span></div>`).join(''); document.getElementById('hall-members').innerHTML = h; }); }
     function updateMarquee() { var msg = document.getElementById('adm-marquee').value; if(!msg) return; callApi('updateMarquee', {msg:msg}).then(r => { alert(r.msg); document.getElementById('marquee-text').innerText = msg; }); }
     function loadAdminFilters() { if(Object.keys(menuConfig).length > 0) { initMaj(); } else { callApi('getConfig').then(cfg => { menuConfig = cfg.menu; initMaj(); }); } } 
