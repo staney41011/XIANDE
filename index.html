@@ -9,7 +9,7 @@
   
   <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
   <script>
-    const APP_VERSION = "20260109-HybridSync-V2"; 
+    const APP_VERSION = "20260109-FinalRestore-V2"; 
 
     (function checkUpdate() {
       const savedVersion = localStorage.getItem("app_version");
@@ -359,9 +359,6 @@
     // 🔴 請務必填入您的 Web App URL
     const API_URL = "https://script.google.com/macros/s/AKfycbxHe88NVoiJkAt2pvBnCYUk_xGul1FhXTAj0kyAXA9GEIddXB1AD8j4gtjhbDEASPSr/exec";
     
-    // 🔴 GitHub Raw Data 基礎路徑
-    const GITHUB_RAW_BASE = "https://raw.githubusercontent.com/staney41011/XIANDE/main/data/";
-
     var gUser=null, gPass=null, gData={}, menuConfig={}, crmData=[];
     var allEvents = [], activeFilters = [], shareDataList = [];
     var cmsUploadFiles = []; 
@@ -389,82 +386,51 @@
         var mStr = d.getFullYear() + "-" + ((d.getMonth()+1)<10?"0"+(d.getMonth()+1):(d.getMonth()+1));
         document.getElementById('adm-month').value = mStr;
 
-        // 🚀 混合模式：嘗試從 GitHub 讀取 Config (極速)，失敗則回退 GAS
-        fetch(GITHUB_RAW_BASE + "config.json?t=" + new Date().getTime())
-          .then(r => { if(r.ok) return r.json(); throw new Error("No GitHub Config"); })
-          .then(cfg => {
-             // GitHub 讀取成功
-             console.log("🚀 Config loaded from GitHub");
-             applyConfig(cfg);
-             // 繼續登入流程
-             var u = localStorage.getItem("xd_u"), p = localStorage.getItem("xd_p");
-             if(u&&p){ document.getElementById('l-u').value=u; document.getElementById('l-p').value=p; doLogin(); } else { loading(false); }
-          })
-          .catch(e => {
-             // GitHub 失敗，走 GAS 備案
-             console.log("⚠️ GitHub Config not found, fallback to GAS");
-             callApi('getConfig').then(cfg => {
-                applyConfig(cfg);
-                var u = localStorage.getItem("xd_u"), p = localStorage.getItem("xd_p");
-                if(u&&p){ document.getElementById('l-u').value=u; document.getElementById('l-p').value=p; doLogin(); } else { loading(false); }
-             }).catch(err => { loading(false); alert("連線失敗: " + err); });
-          });
-
+        callApi('getConfig').then(cfg => {
+            menuConfig = cfg.menu;
+            if(cfg.announcement) document.getElementById('marquee-text').innerText = cfg.announcement;
+            initRegDropdowns();
+            initAdminDropdowns();
+            var u = localStorage.getItem("xd_u"), p = localStorage.getItem("xd_p");
+            if(u&&p){ document.getElementById('l-u').value=u; document.getElementById('l-p').value=p; doLogin(); } else { loading(false); }
+        }).catch(err => {
+            loading(false);
+            console.error(err);
+            alert("連線初始化失敗: " + err);
+        });
         var savedTime = localStorage.getItem("reminder_time");
         if(savedTime) document.getElementById('reminder-time').value = savedTime;
     }
 
-    function applyConfig(cfg) {
-        menuConfig = cfg.menu;
-        if(cfg.announcement) document.getElementById('marquee-text').innerText = cfg.announcement;
-        initRegDropdowns();
-        initAdminDropdowns();
-    }
-
-    // 🔴 核心通訊函式：使用表單參數 'req' 傳送 JSON (最穩定的方式)
+    // 🔴 核心通訊函式：使用純 JSON Body (對應後端最新解析邏輯)
     function callApi(action, params) {
         if(!params) params = {};
         params.action = action;
         
-        var formData = new URLSearchParams();
-        formData.append('req', JSON.stringify(params));
-        
         return fetch(API_URL, { 
             method: 'POST', 
-            body: formData
-        }).then(res => res.json());
-    }
-    
-    // 輔助：嘗試從 GitHub 讀取，失敗則呼叫 GAS API
-    function fetchGitHubOrGas(fileName, gasAction, gasParams, callback) {
-        // 加 timestamp 防止緩存
-        var url = GITHUB_RAW_BASE + fileName + "?t=" + new Date().getTime();
-        fetch(url).then(r => {
-            if(r.ok) return r.json();
-            throw new Error("GitHub 404");
-        }).then(data => {
-            console.log("🚀 Loaded " + fileName + " from GitHub");
-            callback(data);
-        }).catch(e => {
-            console.log("⚠️ GitHub missing " + fileName + ", fallback to GAS");
-            callApi(gasAction, gasParams).then(res => {
-               if(res.error) alert(res.error);
-               else callback(res);
-            });
+            // 不指定 header，使用預設 text/plain，避開 CORS preflight
+            body: JSON.stringify(params) 
+        })
+        .then(res => res.json())
+        .then(json => {
+            if(json.error) {
+               console.error("API Error:", json);
+               if(json.error.includes("Backend")) alert("系統錯誤: " + json.error);
+            }
+            return json;
         });
     }
-
+    
     function loading(x){ document.getElementById('loading').style.display = x?'flex':'none'; }
 
     // ... Share Logic ...
     function loadShareData() {
        var isAdmin = (gData.teamMajor === "主領班");
-       // 🚀 使用混合讀取
-       fetchGitHubOrGas("share.json", "getShareData", {isAdmin: isAdmin}, (res) => {
+       callApi('getShareData', {isAdmin: isAdmin}).then(res => {
           document.getElementById('share-loading').style.display = 'none';
-          shareDataList = res.list || []; // GitHub 存的是 {list: [...]}
+          shareDataList = res.list || [];
           if(isAdmin) renderCmsList();
-          
           var activeList = shareDataList.filter(item => item.isActive);
           if(activeList.length === 0) {
              document.getElementById('share-loading').innerText = "📭 目前沒有推廣內容";
@@ -572,11 +538,10 @@
        });
     }
 
-    // ... Other Features ...
+    // 🔴 3. 補上所有業務邏輯函式 (防止 ReferenceError)
     function loadEvents() {
        document.getElementById('event-list').innerHTML = '<div style="text-align:center; padding:20px; color:#ccc;">載入中...</div>';
-       // 🚀 混合讀取 Events
-       fetchGitHubOrGas("events.json", "getYearlyEvents", {}, (res) => {
+       callApi('getYearlyEvents').then(res => {
           if(res.error) { document.getElementById('event-list').innerHTML = `<div style="text-align:center; color:#f44336;">${res.error}</div>`; return; }
           allEvents = res.list || [];
           var cats = res.cats || [];
@@ -600,11 +565,50 @@
     function completeTodo(id) { if(!confirm("完成此待辦事項？")) return; var item = crmData.find(x => x.id == id); if(item) { item.todo = ""; loading(true); callApi('saveCRM', {u:gUser, item:item}).then(res => { loading(false); loadCRM(); }); } }
     function openAdminCRM(userName) { document.getElementById('modal-overlay').style.display = 'flex'; document.getElementById('modal-title').innerText = "載入中..."; document.getElementById('modal-content').innerHTML = "請稍候..."; loadCRM(userName); }
     
+    // 🔴 核心修復：統一命名為 initAdminDropdowns
     function initRegDropdowns(){ var s=document.getElementById('r-maj'), opts="<option disabled selected>選擇團隊</option>"; for(var k in menuConfig){ opts += `<option value="${k}">${k}</option>`; } s.innerHTML = opts; }
     function initAdminDropdowns(){ var s=document.getElementById('adm-maj'), opts="<option value='全部'>全部團隊</option>"; for(var k in menuConfig){ opts += `<option value="${k}">${k}</option>`; } s.innerHTML = opts; admUpdMin(); }
     
+    // 🔴 修正呼叫
+    function loadAdminFilters() { 
+        if(Object.keys(menuConfig).length > 0) { 
+            initAdminDropdowns(); 
+        } else { 
+            callApi('getConfig').then(cfg => { 
+                menuConfig = cfg.menu; 
+                initAdminDropdowns(); 
+            }); 
+        } 
+    }
+    
+    function updMinor(){ var m=document.getElementById('r-maj').value, s=document.getElementById('r-min'); s.innerHTML=""; if(menuConfig[m]) menuConfig[m].forEach(x => { var o=document.createElement('option'); o.value=x; o.innerText=x; s.appendChild(o); }); }
+    function admUpdMin(){ var m=document.getElementById('adm-maj').value, s=document.getElementById('adm-min'); s.innerHTML="<option value='全部'>全部公堂</option>"; if(m !== '全部' && menuConfig[m]) { menuConfig[m].forEach(x => { var o=document.createElement('option'); o.value=x; o.innerText=x; s.appendChild(o); }); } }
+    function toggleAuth(t){ document.getElementById('f-login').style.display=t=='login'?'block':'none'; document.getElementById('f-reg').style.display=t=='register'?'block':'none'; }
+    function nav(t){ ['home','orchard','profile','admin','crm','events'].forEach(x=>{ document.getElementById('v-'+x).classList.remove('active'); document.getElementById('n-'+x).classList.remove('active'); }); document.getElementById('v-'+t).classList.add('active'); document.getElementById('n-'+t).classList.add('active'); }
+    function closeModal() { document.getElementById('modal-overlay').style.display = 'none'; }
+    function toggleAdmDateInput() { var mode = document.getElementById('adm-mode').value; document.getElementById('adm-date-box').style.display = mode==='date' ? 'block' : 'none'; document.getElementById('adm-month-box').style.display = mode==='month' ? 'block' : 'none'; }
+    function doReg(){ var u=document.getElementById('r-u').value, p=document.getElementById('r-p').value, maj=document.getElementById('r-maj').value, min=document.getElementById('r-min').value; if(!u||!p||!maj||!min){ alert("請填寫完整"); return; } loading(true); callApi('register', {u:u, p:p, maj:maj, min:min}).then(r => { loading(false); alert(r.msg); if(r.success) toggleAuth('login'); }); }
+    function doLogin(){ var u=document.getElementById('l-u').value, p=document.getElementById('l-p').value; loading(true); callApi('login', {u:u, p:p}).then(r => { loading(false); if(r.success){ gUser=u; gPass=p; gData=r.gameData; localStorage.setItem("xd_u",u); localStorage.setItem("xd_p",p); if(window.OneSignal) OneSignal.User.addTag("user", u); loadShareData(); lastLogTime = new Date().getTime(); if(gData.teamMajor === "主領班") { document.getElementById('n-admin').style.display = 'block'; } enterGame(); } else { alert(r.msg); } }); }
+    function enterGame(){ document.getElementById('auth-screen').style.display='none'; document.getElementById('game-screen').style.display='flex'; renderUI(); }
+    function logout(){ if(confirm("登出?")){ localStorage.removeItem("xd_p"); location.reload(); } }
+    function renderUI(){ document.getElementById('ui-team').innerText = gData.teamFull; document.getElementById('p-job').innerText = gData.job; updateDashboard(); var ck = document.getElementById('ck-sport'); if(gData.task_sport_done){ ck.style.background='var(--primary)'; ck.style.borderColor='var(--primary)'; } else { ck.style.background='transparent'; ck.style.borderColor='#ddd'; } updTimer(gData.task_read_time||0); }
+    function addCount(id) { var el = document.getElementById(id); el.value = parseInt(el.value || 0) + 1; updateDashboard(); }
+    function minusCount(id) { var el = document.getElementById(id); var val = parseInt(el.value || 0); if (val > 0) { el.value = val - 1; updateDashboard(); } }
+    function updateDashboard() { var addS = parseInt(document.getElementById('inp-spoke').value||0); var addC = parseInt(document.getElementById('inp-conv').value||0); var addCl = parseInt(document.getElementById('inp-class').value||0); var totalS = (gData.spoke_count||0) + addS; var totalC = (gData.convert_count||0) + addC; var totalCl = (gData.class_count||0) + addCl; document.getElementById('today-dash').innerText = `📊 今日已累積：開口 ${totalS} | 渡眾 ${totalC} | 入班 ${totalCl}`; }
+    function toggleTimer(){ var b = document.getElementById('btn-timer'); if(isTimer){ clearInterval(timerInt); isTimer=false; b.innerText="繼續計時"; b.className="btn btn-primary"; saveData({action:"讀書", detail:"累計 "+Math.floor(gData.task_read_time/60)+" 分鐘"}); } else { timerInt = setInterval(function(){ gData.task_read_time=(gData.task_read_time||0)+1; updTimer(gData.task_read_time); }, 1000); isTimer=true; b.innerText="暫停計時"; b.className="btn btn-warn"; } }
+    function updTimer(s){ var m=Math.floor(s/60), sec=s%60; document.getElementById('timer-display').innerText = (m<10?"0"+m:m)+":"+(sec<10?"0"+sec:sec); }
+    function toggleSport(){ if(gData.task_sport_done) return; gData.task_sport_done = true; renderUI(); saveData({action:"運動", detail:"完成今日30分鐘運動！"}); }
+    function saveAchievements(){ var addS = parseInt(document.getElementById('inp-spoke').value||0); var addC = parseInt(document.getElementById('inp-conv').value||0); var addCl = parseInt(document.getElementById('inp-class').value||0); if(addS==0 && addC==0 && addCl==0) { alert("請輸入數量"); return; } gData.spoke_count = (gData.spoke_count||0) + addS; gData.convert_count = (gData.convert_count||0) + addC; gData.class_count = (gData.class_count||0) + addCl; loading(true); var msg = `開口${addS}, 渡眾${addC}, 入班${addCl}`; callApi('saveGameData', {u:gUser, p:gPass, data:gData, log:{action:"回報成果", detail: msg}}).then(r => { loading(false); document.getElementById('inp-spoke').value=0; document.getElementById('inp-conv').value=0; document.getElementById('inp-class').value=0; renderUI(); alert("📜 紀錄已同步！"); }); }
+    function saveData(logObj){ callApi('saveGameData', {u:gUser, p:gPass, data:gData, log:logObj}); }
+    function setLocalReminder() { var t = document.getElementById('reminder-time').value; localStorage.setItem("reminder_time", t); if('Notification' in window) Notification.requestPermission(); alert("提醒時間已設定為 " + t); }
+    
     // 🔴 缺少的函式補完了
-    function changeMonth(delta) { curMonth += delta; if(curMonth > 12) { curMonth = 1; curYear++; } if(curMonth < 1) { curMonth = 12; curYear--; } loadCalendar(); }
+    function changeMonth(delta) { 
+        curMonth += delta; 
+        if(curMonth > 12) { curMonth = 1; curYear++; } 
+        if(curMonth < 1) { curMonth = 12; curYear--; } 
+        loadCalendar(); 
+    }
     
     function loadCalendar() { 
         var mStr = curYear + "-" + (curMonth<10?"0"+curMonth:curMonth); 
@@ -620,7 +624,13 @@
                 var dStr = mStr + "-" + (d<10?"0"+d:d); 
                 var dayData = res.cal[dStr]; 
                 var cls = "cal-day"; 
-                if(dayData) { var count = 0; if(dayData.read) count++; if(dayData.sport) count++; if(dayData.achieve) count++; if(count > 0) cls += " cal-fill-" + count; } 
+                if(dayData) { 
+                    var count = 0; 
+                    if(dayData.read) count++; 
+                    if(dayData.sport) count++; 
+                    if(dayData.achieve) count++; 
+                    if(count > 0) cls += " cal-fill-" + count; 
+                } 
                 html += `<div class="${cls}">${d}</div>`; 
             } 
             document.getElementById('calendar-area').innerHTML = html; 
@@ -631,30 +641,9 @@
         }); 
     }
     
-    // 🚀 混合讀取 Orchard
-    function loadOrchard(){ 
-      document.getElementById('orchard-container').innerHTML = 'Loading...'; 
-      fetchGitHubOrGas("orchard.json", "getOrchardData", {}, (data) => { 
-        var html = ""; var totalS=0, totalC=0, totalCl=0; 
-        for(var key in data){ 
-          var h = data[key]; 
-          var s = Number(h.spoke)||0; var c = Number(h.convert)||0; var cl = Number(h.joinClass)||0; totalS+=s; totalC+=c; totalCl+=cl; 
-          var fruits = ""; 
-          var redFruits = Math.floor(s / 10); var totalPoints = redFruits + c + cl; 
-          var treeClass = "tree-scale-s"; if(totalPoints > 20) treeClass = "tree-scale-l"; else if(totalPoints > 5) treeClass = "tree-scale-m"; 
-          for(var i=0; i<redFruits && i<10; i++) fruits += '<div class="fruit red"></div>'; for(var i=0; i<c && i<10; i++) fruits += '<div class="fruit gold"></div>'; for(var i=0; i<cl && i<10; i++) fruits += '<div class="fruit blue"></div>'; if(totalPoints == 0) fruits = '<span style="font-size:10px; color:#fff;">種子</span>'; 
-          var info = `開口:${s} 渡眾:${c} 入班:${cl}`; 
-          html += `<div class="tree-container ${treeClass}" onclick="openHallModal('${h.name}', '${info}')"><div class="tree-canopy">${fruits}</div><div class="tree-trunk"></div><div class="tree-label">${h.name}<br><span style="font-size:10px;">${h.members}人</span></div></div>`; 
-        } 
-        document.getElementById('orchard-container').innerHTML = html || "無資料"; 
-        if(document.getElementById('dash-spoke')) { document.getElementById('dash-spoke').innerText = totalS; document.getElementById('dash-conv').innerText = totalC; document.getElementById('dash-class').innerText = totalCl; } 
-        loadGlobalLogs(); 
-      }); 
-    }
-    
+    function loadOrchard(){ document.getElementById('orchard-container').innerHTML = 'Loading...'; callApi('getOrchardData').then(data => { var html = ""; for(var key in data){ var h = data[key]; var fruits = ""; var sp = Number(h.spoke)||0; var cv = Number(h.convert)||0; var cl = Number(h.joinClass)||0; var redFruits = Math.floor(sp / 10); var totalPoints = redFruits + cv + cl; var treeClass = "tree-scale-s"; if(totalPoints > 20) treeClass = "tree-scale-l"; else if(totalPoints > 5) treeClass = "tree-scale-m"; for(var i=0; i<redFruits && i<10; i++) fruits += '<div class="fruit red"></div>'; for(var i=0; i<cv && i<10; i++) fruits += '<div class="fruit gold"></div>'; for(var i=0; i<cl && i<10; i++) fruits += '<div class="fruit blue"></div>'; if(totalPoints == 0) fruits = '<span style="font-size:10px; color:#fff;">種子</span>'; var info = `開口:${sp} 渡眾:${cv} 入班:${cl}`; html += `<div class="tree-container ${treeClass}" onclick="openHallModal('${h.name}', '${info}')"><div class="tree-canopy">${fruits}</div><div class="tree-trunk"></div><div class="tree-label">${h.name}<br><span style="font-size:10px;">${h.members}人</span></div></div>`; } document.getElementById('orchard-container').innerHTML = html || "無資料"; if(document.getElementById('dash-spoke')) { document.getElementById('dash-spoke').innerText = data.totalSpoke || 0; document.getElementById('dash-conv').innerText = data.totalConv || 0; document.getElementById('dash-class').innerText = data.totalClass || 0; } loadGlobalLogs(); }); }
     function openHallModal(name, info) { document.getElementById('modal-overlay').style.display = 'flex'; document.getElementById('modal-title').innerText = name; document.getElementById('modal-content').innerHTML = `<div style="background:#f1f8e9; padding:10px; border-radius:10px; margin-bottom:10px;"><b>📊 公堂總成績</b><br>${info}</div><div id="hall-members">成員載入中...</div>`; callApi('getHallDetails', {hall:name}).then(res => { var h = res.list.map(m => `<div class="member-row"><span>${m.name}</span><span>開${m.s}/渡${m.c}/班${m.cl}</span></div>`).join(''); document.getElementById('hall-members').innerHTML = h; }); }
     function updateMarquee() { var msg = document.getElementById('adm-marquee').value; if(!msg) return; callApi('updateMarquee', {msg:msg}).then(r => { alert(r.msg); document.getElementById('marquee-text').innerText = msg; }); }
-    function loadAdminFilters() { if(Object.keys(menuConfig).length > 0) { initAdminDropdowns(); } else { callApi('getConfig').then(cfg => { menuConfig = cfg.menu; initAdminDropdowns(); }); } }
     function runAdminQuery() { try { if(Object.keys(menuConfig).length === 0) { alert("系統資料載入中，請稍後再試..."); return; } var filters = { major: document.getElementById('adm-maj').value, minor: document.getElementById('adm-min').value, hasSport: document.getElementById('f-sport').checked, hasRead: document.getElementById('f-read').checked, hasSpoke: document.getElementById('f-spoke').checked, hasConv: document.getElementById('f-conv').checked, hasClass: document.getElementById('f-class').checked }; var mode = document.getElementById('adm-mode').value; var dateVal = ""; if(mode === 'date') dateVal = document.getElementById('adm-date').value; if(mode === 'month') dateVal = document.getElementById('adm-month').value; loading(true); callApi('getAdminReport', {filters:filters, mode:mode, dateVal:dateVal}).then(res => { loading(false); if(res.error) { alert("系統錯誤: " + res.error); return; } if(!res.list || res.list.length === 0) { document.getElementById('admin-report').style.display = 'block'; document.getElementById('admin-report').innerHTML = "<div style='text-align:center; color:#666; padding:10px;'>⚠️ 查無符合條件的資料</div>"; document.getElementById('admin-list').innerHTML = ""; return; } var st = res.stats; var repHtml = `<div><b>[${mode === 'all' ? '全部歷史' : dateVal}]</b></div><div>篩選人數: <b>${st.count}</b></div><div>累計開口: ${st.totalSpoke} | 渡眾: ${st.totalConv} | 入班: ${st.totalClass}</div><div>運動人次: ${st.totalSport}</div>`; document.getElementById('admin-report').innerHTML = repHtml; document.getElementById('admin-report').style.display = 'block'; var listHtml = res.list.map(u => { var badges = ""; if(u.sportCount > 0) badges += `<span style='background:#8bc34a'>運${u.sportCount}</span>`; if(u.readCount > 0) badges += `<span style='background:#81d4fa'>讀${u.readCount}</span>`; if(u.spoke > 0) badges += `<span style='background:#ff8a80'>開${u.spoke}</span>`; if(u.conv > 0) badges += `<span style='background:#ffd54f'>渡${u.conv}</span>`; return `<div class="admin-row"><div style="flex:1"><div style="font-weight:bold;">${u.name} <span onclick="openAdminCRM('${u.name}')" style="cursor:pointer; margin-left:5px;">📒</span></div><div style="font-size:10px; color:#999;">${u.minor}</div></div><div class="admin-stat-badges" style="text-align:right;">${badges}</div></div>`; }).join(''); document.getElementById('admin-list').innerHTML = listHtml; }).catch(err => { loading(false); alert("連線失敗: " + err); }); } catch(e) { loading(false); alert("前端錯誤: " + e.message); } }
     function sendBroadcast() { var msg = document.getElementById('broadcast-msg').value; if (!msg) { alert("請輸入訊息內容"); return; } var time = document.getElementById('broadcast-time').value; if(confirm("確定要發送這則通知給所有人嗎？")) { loading(true); callApi('broadcast', {msg: msg, time: time}).then(res => { loading(false); if (res.success) { alert("發送成功"); document.getElementById('broadcast-msg').value = ""; } else { alert("發送失敗: " + res.msg); } }); } }
     function loadGlobalLogs(){ var c = document.getElementById('log-container'); c.innerHTML = '<div style="padding:20px; text-align:center;">讀取中...</div>'; callApi('getGlobalLogs').then(res => { var h = ""; if(res.list.length==0) h='<div style="padding:20px; text-align:center;">尚無紀錄</div>'; res.list.forEach(function(l){ var color = "#eee"; if(l.action.includes("運動")) color="#e8f5e9"; if(l.action.includes("讀書")) color="#e3f2fd"; if(l.action.includes("回報")) color="#fff3e0"; h += `<div class="log-item"><div class="log-time">${l.time}</div><div class="log-content"><span style="font-weight:bold; color:#555;">${l.user}</span> <span class="log-tag" style="background:${color}">${l.action}</span><span>${l.detail}</span><div style="font-size:9px; color:#bbb;">(${l.hall})</div></div></div>`; }); c.innerHTML = h; }); }
