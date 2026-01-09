@@ -9,7 +9,7 @@
   
   <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
   <script>
-    const APP_VERSION = "20260109-Final-V1"; 
+    const APP_VERSION = "20260109-FinalFix-V1"; 
 
     (function checkUpdate() {
       const savedVersion = localStorage.getItem("app_version");
@@ -235,12 +235,15 @@
 
       <div id="v-orchard" class="view-section" style="text-align:center;">
         <button class="btn btn-primary" style="margin-bottom:15px; font-size:12px; padding:8px; width:auto;" onclick="loadOrchard()">🔄 更新果園數據</button>
+        
         <div id="orchard-dash" class="orchard-dashboard">
            <div class="dash-item"><span id="dash-spoke" class="dash-num">0</span><span class="dash-label">總開口</span></div>
            <div class="dash-item"><span id="dash-conv" class="dash-num">0</span><span class="dash-label">總渡眾</span></div>
            <div class="dash-item"><span id="dash-class" class="dash-num">0</span><span class="dash-label">總入班</span></div>
         </div>
+
         <div id="orchard-container" class="orchard-grid"></div>
+        
         <div style="margin-top:20px; border-top:1px dashed #ccc; padding-top:10px;">
            <h4 style="color:#666;">📜 最新動態</h4>
            <div id="log-container" class="card" style="padding:0; overflow:hidden; width:100%; border:none; box-shadow:none; background:transparent;"></div>
@@ -399,15 +402,10 @@
     function callApi(action, params) {
         if(!params) params = {};
         params.action = action;
-        
-        // 🔹 修正重點：明確加入 headers 和 redirect 設定
+        // 🔴 關鍵修正：確保 payload 是 JSON 字串，且不設 headers 以避開 OPTIONS preflight
         return fetch(API_URL, { 
             method: 'POST', 
-            headers: {
-              "Content-Type": "text/plain;charset=utf-8" 
-            },
-            body: JSON.stringify(params),
-            redirect: "follow" // 確保跟隨重定向
+            body: JSON.stringify(params) 
         }).then(res => res.json());
     }
     
@@ -436,7 +434,6 @@
           document.getElementById('share-container').style.display = 'flex';
           var html = "";
           activeList.forEach((item, index) => {
-             // 要用 item.index 來對應原始 shareDataList 的位置，避免按錯
              var originalIndex = shareDataList.indexOf(item);
              var firstImg = (item.images && item.images.length>0) ? item.images[0] : "";
              var imgHtml = firstImg ? `<img src="${firstImg}" class="share-img">` : `<div style="text-align:center; color:#ccc; padding:20px; background:#f5f5f5; border-radius:8px; margin-bottom:10px;">無圖片</div>`;
