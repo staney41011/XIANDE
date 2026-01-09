@@ -399,8 +399,18 @@
     function callApi(action, params) {
         if(!params) params = {};
         params.action = action;
-        return fetch(API_URL, { method: 'POST', body: JSON.stringify(params) }).then(res => res.json());
+        
+        // 🔹 修正重點：明確加入 headers 和 redirect 設定
+        return fetch(API_URL, { 
+            method: 'POST', 
+            headers: {
+              "Content-Type": "text/plain;charset=utf-8" 
+            },
+            body: JSON.stringify(params),
+            redirect: "follow" // 確保跟隨重定向
+        }).then(res => res.json());
     }
+    
     function loading(x){ document.getElementById('loading').style.display = x?'flex':'none'; }
 
     // 🔴 1. Share Logic (Native Web Share API)
