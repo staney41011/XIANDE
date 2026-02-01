@@ -9,7 +9,7 @@
   
   <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
   <script>
-    const APP_VERSION = "20260201-CleanUI-V5.9"; 
+    const APP_VERSION = "20260201-SmartBookmark-V6.0"; 
 
     (function checkUpdate() {
       const savedVersion = localStorage.getItem("app_version");
@@ -47,7 +47,6 @@
     .top-nav { background: #fff; padding: 10px 15px; display: flex; flex-direction: column; box-shadow: 0 2px 5px rgba(0,0,0,0.05); z-index: 10; flex-shrink: 0;}
     .nav-header { display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 5px;}
     .card { background: var(--card-bg); border-radius: 20px; box-shadow: var(--shadow); padding: 20px; margin-bottom: 15px; width: 95%; max-width: 380px; border: 2px solid #fff; margin-left: auto; margin-right: auto; position: relative; transition: transform 0.1s, background-color 0.1s; }
-    /* 🔴 新增：卡片點擊效果 (解決手機沒反應的感覺) */
     .card:active { transform: scale(0.98); background-color: #f9f9f9; }
     
     .btn { width: 100%; padding: 12px; border-radius: 12px; border: none; font-weight: bold; color: #fff; cursor: pointer; margin-top: 5px; box-shadow: 0 3px 0 rgba(0,0,0,0.1); }
@@ -170,10 +169,13 @@
     .preview-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; margin-top: 5px; }
     .preview-img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 4px; background: #eee; }
 
-    /* 🔴 新增：經典閱讀樣式 */
+    /* 🔴 新增：經典閱讀樣式 (包含閱讀進度高亮) */
     #v-classics { background: #f9f9f9; height: 100%; display: none; flex-direction: column; }
-    #v-classics.active { display: flex; }
-    .classics-content { flex: 1; padding: 20px; font-size: 20px; line-height: 1.8; color: #333; overflow-y: auto; text-align: justify; background: #fff; margin: 10px; border-radius: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+    .classics-content { flex: 1; padding: 20px; font-size: 20px; line-height: 1.8; color: #333; overflow-y: auto; text-align: justify; background: #fff; margin: 10px; border-radius: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); scroll-behavior: smooth; }
+    .classics-content p { margin-bottom: 15px; padding: 5px; border-radius: 5px; transition: background 0.3s; }
+    /* 當前閱讀段落高亮效果 */
+    .reading-active { background-color: #fff9c4; border-left: 4px solid var(--accent); padding-left: 10px; }
+    
     .classics-ctrl { background: #fff; padding: 15px; border-top: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 -2px 10px rgba(0,0,0,0.05); }
     .classics-title { font-size: 18px; font-weight: bold; color: var(--primary); margin-bottom: 5px; text-align: center; }
   </style>
@@ -413,6 +415,9 @@
     let wakeLock = null;
     let classicsStartTime = 0;
     let ttsUtterance = null;
+    let readingObserver = null;
+    let currentParagraphIndex = 0; // 當前閱讀段落
+    let totalParagraphs = 0; // 總段落數
     
     // 🔴 經典系統變數
     let classicsMenuData = {}; // 存後端回傳的目錄結構
@@ -586,57 +591,137 @@
              if(res.success) {
                  // 更新全域變數，讓朗讀功能讀到正確的內容
                  CLASSICS_CONTENT = res.content; 
-                 document.getElementById('classics-reader').innerHTML = res.content;
+                 var reader = document.getElementById('classics-reader');
+                 reader.innerHTML = res.content;
+                 
+                 // 🔴 啟動智慧書籤偵測
+                 setupReaderObserver();
+                 // 🔴 恢復閱讀進度
+                 restoreReadingProgress(title);
              } else {
                  document.getElementById('classics-reader').innerHTML = `<div style="color:red; text-align:center;">無法讀取內容：${res.error}</div>`;
              }
         });
     }
 
-    // 🔴 5. 返回按鈕邏輯
+    // 🔴 新增：設定段落偵測器 (Intersection Observer)
+    function setupReaderObserver() {
+        if (readingObserver) readingObserver.disconnect();
+        
+        var paragraphs = document.querySelectorAll('#classics-reader p');
+        totalParagraphs = paragraphs.length;
+        currentParagraphIndex = 0; // 重置
+        
+        var options = {
+            root: document.getElementById('classics-reader'),
+            threshold: 0.5 // 50% 可見時觸發
+        };
+        
+        readingObserver = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    // 找出這個 p 是第幾個
+                    var allP = Array.from(document.querySelectorAll('#classics-reader p'));
+                    var index = allP.indexOf(entry.target);
+                    if (index !== -1) {
+                        currentParagraphIndex = index;
+                        // 移除舊的高亮，加上新的
+                        allP.forEach(p => p.classList.remove('reading-active'));
+                        entry.target.classList.add('reading-active');
+                    }
+                }
+            });
+        }, options);
+        
+        paragraphs.forEach(p => readingObserver.observe(p));
+    }
+    
+    // 🔴 新增：恢復閱讀進度
+    function restoreReadingProgress(chapterTitle) {
+        if (!gData.reading_bookmark) gData.reading_bookmark = {};
+        
+        // 取得上次進度 (段落 index)
+        var lastIndex = gData.reading_bookmark[chapterTitle];
+        
+        if (lastIndex && lastIndex > 0) {
+            var paragraphs = document.querySelectorAll('#classics-reader p');
+            if (paragraphs[lastIndex]) {
+                // 自動捲動到該段落
+                setTimeout(() => {
+                    paragraphs[lastIndex].scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    paragraphs[lastIndex].classList.add('reading-active');
+                }, 500); // 稍微延遲確保渲染完成
+            }
+        }
+    }
+
+    // 🔴 5. 返回按鈕邏輯 (整合智慧書籤存檔)
     function backToMenu() {
         if (document.getElementById('classics-reader').style.display === 'block') {
-            // 如果在閱讀內文，先結算時間
-            calculateReadTime();
-            releaseWakeLock(); // 關閉恆亮
-            if(window.speechSynthesis) window.speechSynthesis.cancel(); // 停止語音
+            // 如果在閱讀內文，先結算時間 + 存檔進度
+            closeClassics(true); // true 代表只是返回上一層，不完全關閉
             showChapterList(currentSubject); // 返回篇章列表
         } else if (currentSubject) {
             // 如果在篇章列表，返回科目單
             showSubjectList();
         } else {
             // 如果在科目單，就關閉
-            closeClassics();
+            closeClassics(false);
         }
     }
 
-    // 🔴 6. 結算時間 (獨立出來方便呼叫)
-    function calculateReadTime() {
+    // 🔴 6. 結算時間 & 書籤 (獨立出來方便呼叫)
+    function calculateReadTimeAndBookmark() {
         if(!classicsStartTime) return;
+        
         var durationSec = Math.floor((Date.now() - classicsStartTime) / 1000);
         classicsStartTime = 0; // 重置
         
+        // --- 處理書籤邏輯 ---
+        if (!gData.reading_bookmark) gData.reading_bookmark = {};
+        
+        // 判斷是否讀完 (如果是最後一段)
+        if (currentParagraphIndex >= totalParagraphs - 1) {
+            // 已讀完，歸零
+            gData.reading_bookmark[currentChapter] = 0;
+            // 可以選擇是否要跳出恭喜訊息
+        } else {
+            // 未讀完，記錄當前段落
+            gData.reading_bookmark[currentChapter] = currentParagraphIndex;
+        }
+
+        // --- 處理時間邏輯 ---
         if(durationSec > 5) { // 讀超過5秒才紀錄
            gData.task_read_time = (gData.task_read_time || 0) + durationSec;
            var min = Math.floor(durationSec / 60);
-           // 背景同步，不阻擋 UI
+           
+           // 背景同步
            callApi('saveGameData', {
               u:gUser, p:gPass, data:gData, 
               log: { action: "讀經", detail: `${currentChapter || '經典'} (${min}分${durationSec%60}秒)` }
            }).then(() => {
               renderUI(); // 更新首頁時間顯示
+              // 可選：提示書籤已儲存
+              // alert("進度已儲存"); 
            });
         }
     }
 
     // 修改原本的 closeClassics
-    function closeClassics() {
-        calculateReadTime();
+    function closeClassics(isBack) {
+        if (document.getElementById('classics-reader').style.display === 'block') {
+             calculateReadTimeAndBookmark();
+             if(readingObserver) readingObserver.disconnect();
+        }
+        
         if(window.speechSynthesis) window.speechSynthesis.cancel();
         releaseWakeLock();
-        document.getElementById('v-classics').classList.remove('active');
-        document.getElementById('v-classics').style.display = 'none'; // 🔴 明確隱藏
-        document.querySelector('.viewport').style.display = 'flex'; // 🔴 明確顯示主畫面
+        
+        if (!isBack) {
+            document.getElementById('v-classics').classList.remove('active');
+            document.getElementById('v-classics').style.display = 'none'; // 🔴 明確隱藏
+            document.querySelector('.viewport').style.display = 'flex'; // 🔴 明確顯示主畫面
+        }
     }
 
     function toggleTTS() {
@@ -983,7 +1068,6 @@
     
     function openHallModal(name, info) { document.getElementById('modal-overlay').style.display = 'flex'; document.getElementById('modal-title').innerText = name; document.getElementById('modal-content').innerHTML = `<div style="background:#f1f8e9; padding:10px; border-radius:10px; margin-bottom:10px;"><b>📊 公堂總成績</b><br>${info}</div><div id="hall-members">成員載入中...</div>`; callApi('getHallDetails', {hall:name}).then(res => { var h = res.list.map(m => `<div class="member-row"><span>${m.name}</span><span>開${m.s}/渡${m.c}/班${m.cl}</span></div>`).join(''); document.getElementById('hall-members').innerHTML = h; }); }
     function updateMarquee() { var msg = document.getElementById('adm-marquee').value; if(!msg) return; callApi('updateMarquee', {msg:msg}).then(r => { alert(r.msg); document.getElementById('marquee-text').innerText = msg; }); }
-    function loadAdminFilters() { if(Object.keys(menuConfig).length > 0) { initAdminDropdowns(); } else { callApi('getConfig').then(cfg => { menuConfig = cfg.menu; initAdminDropdowns(); }); } } 
     function runAdminQuery() { try { if(Object.keys(menuConfig).length === 0) { alert("系統資料載入中，請稍後再試..."); return; } var filters = { major: document.getElementById('adm-maj').value, minor: document.getElementById('adm-min').value, hasSport: document.getElementById('f-sport').checked, hasRead: document.getElementById('f-read').checked, hasSpoke: document.getElementById('f-spoke').checked, hasConv: document.getElementById('f-conv').checked, hasClass: document.getElementById('f-class').checked }; var mode = document.getElementById('adm-mode').value; var dateVal = ""; if(mode === 'date') dateVal = document.getElementById('adm-date').value; if(mode === 'month') dateVal = document.getElementById('adm-month').value; loading(true); callApi('getAdminReport', {filters:filters, mode:mode, dateVal:dateVal}).then(res => { loading(false); if(res.error) { alert("系統錯誤: " + res.error); return; } if(!res.list || res.list.length === 0) { document.getElementById('admin-report').style.display = 'block'; document.getElementById('admin-report').innerHTML = "<div style='text-align:center; color:#666; padding:10px;'>⚠️ 查無符合條件的資料</div>"; document.getElementById('admin-list').innerHTML = ""; return; } var st = res.stats; var repHtml = `<div><b>[${mode === 'all' ? '全部歷史' : dateVal}]</b></div><div>篩選人數: <b>${st.count}</b></div><div>累計開口: ${st.totalSpoke} | 渡眾: ${st.totalConv} | 入班: ${st.totalClass}</div><div>運動人次: ${st.totalSport}</div>`; document.getElementById('admin-report').innerHTML = repHtml; document.getElementById('admin-report').style.display = 'block'; var listHtml = res.list.map(u => { var badges = ""; if(u.sportCount > 0) badges += `<span style='background:#8bc34a'>運${u.sportCount}</span>`; if(u.readCount > 0) badges += `<span style='background:#81d4fa'>讀${u.readCount}</span>`; if(u.spoke > 0) badges += `<span style='background:#ff8a80'>開${u.spoke}</span>`; if(u.conv > 0) badges += `<span style='background:#ffd54f'>渡${u.conv}</span>`; return `<div class="admin-row"><div style="flex:1"><div style="font-weight:bold;">${u.name} <span onclick="openAdminCRM('${u.name}')" style="cursor:pointer; margin-left:5px;">📒</span></div><div style="font-size:10px; color:#999;">${u.minor}</div></div><div class="admin-stat-badges" style="text-align:right;">${badges}</div></div>`; }).join(''); document.getElementById('admin-list').innerHTML = listHtml; }).catch(err => { loading(false); alert("連線失敗: " + err); }); } catch(e) { loading(false); alert("前端錯誤: " + e.message); } }
     function sendBroadcast() { var msg = document.getElementById('broadcast-msg').value; if (!msg) { alert("請輸入訊息內容"); return; } var time = document.getElementById('broadcast-time').value; if(confirm("確定要發送這則通知給所有人嗎？")) { loading(true); callApi('broadcast', {msg: msg, time: time}).then(res => { loading(false); if (res.success) { alert("發送成功"); document.getElementById('broadcast-msg').value = ""; } else { alert("發送失敗: " + res.msg); } }); } }
     function loadGlobalLogs(){ var c = document.getElementById('log-container'); c.innerHTML = '<div style="padding:20px; text-align:center;">讀取中...</div>'; callApi('getGlobalLogs').then(res => { var h = ""; if(res.list.length==0) h='<div style="padding:20px; text-align:center;">尚無紀錄</div>'; res.list.forEach(function(l){ var color = "#eee"; if(l.action.includes("運動")) color="#e8f5e9"; if(l.action.includes("讀書")) color="#e3f2fd"; if(l.action.includes("回報")) color="#fff3e0"; h += `<div class="log-item"><div class="log-time">${l.time}</div><div class="log-content"><span style="font-weight:bold; color:#555;">${l.user}</span> <span class="log-tag" style="background:${color}">${l.action}</span><span>${l.detail}</span><div style="font-size:9px; color:#bbb;">(${l.hall})</div></div></div>`; }); c.innerHTML = h; }); }
