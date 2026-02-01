@@ -9,7 +9,7 @@
   
   <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
   <script>
-    const APP_VERSION = "20260201-UIFix-V5.7"; 
+    const APP_VERSION = "20260201-MobileTouchFix-V5.8"; 
 
     (function checkUpdate() {
       const savedVersion = localStorage.getItem("app_version");
@@ -46,7 +46,10 @@
     .viewport { flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; align-items: center; width: 100%; padding-bottom: 100px; scroll-behavior: smooth;}
     .top-nav { background: #fff; padding: 10px 15px; display: flex; flex-direction: column; box-shadow: 0 2px 5px rgba(0,0,0,0.05); z-index: 10; flex-shrink: 0;}
     .nav-header { display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 5px;}
-    .card { background: var(--card-bg); border-radius: 20px; box-shadow: var(--shadow); padding: 20px; margin-bottom: 15px; width: 95%; max-width: 380px; border: 2px solid #fff; margin-left: auto; margin-right: auto; position: relative;}
+    .card { background: var(--card-bg); border-radius: 20px; box-shadow: var(--shadow); padding: 20px; margin-bottom: 15px; width: 95%; max-width: 380px; border: 2px solid #fff; margin-left: auto; margin-right: auto; position: relative; transition: transform 0.1s, background-color 0.1s; }
+    /* 🔴 新增：卡片點擊效果 (解決手機沒反應的感覺) */
+    .card:active { transform: scale(0.98); background-color: #f9f9f9; }
+    
     .btn { width: 100%; padding: 12px; border-radius: 12px; border: none; font-weight: bold; color: #fff; cursor: pointer; margin-top: 5px; box-shadow: 0 3px 0 rgba(0,0,0,0.1); }
     .btn:active { transform: translateY(2px); box-shadow: none; }
     .btn-primary { background: var(--blue); } .btn-success { background: var(--primary); } .btn-warn { background: var(--accent); }
@@ -153,7 +156,7 @@
     .share-title { font-weight: bold; margin-bottom: 5px; color: #00c300; }
     .share-text { background:#f1f8e9; padding:8px; border-radius:8px; font-size:12px; color:#555; margin-bottom:10px; max-height:60px; overflow-y:auto; flex: 1; }
     
-    /* 主領班 CMS 樣式 */
+    /* 🔴 主領班 CMS 樣式 */
     .admin-menu-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px; }
     .admin-menu-btn { padding: 15px; background: #fff; border: 1px solid #eee; border-radius: 12px; text-align: center; cursor: pointer; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
     .admin-menu-btn:active { transform: scale(0.98); background: #fafafa; }
@@ -167,9 +170,9 @@
     .preview-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; margin-top: 5px; }
     .preview-img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 4px; background: #eee; }
 
-    /* 🔴 新增：經典閱讀樣式 (修正版) */
+    /* 🔴 新增：經典閱讀樣式 */
     #v-classics { background: #f9f9f9; height: 100%; display: none; flex-direction: column; }
-    /* 重點：這裡的 display: flex 是由 JS 直接控制 element.style，CSS 輔助即可 */
+    #v-classics.active { display: flex; }
     .classics-content { flex: 1; padding: 20px; font-size: 20px; line-height: 1.8; color: #333; overflow-y: auto; text-align: justify; background: #fff; margin: 10px; border-radius: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
     .classics-ctrl { background: #fff; padding: 15px; border-top: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 -2px 10px rgba(0,0,0,0.05); }
     .classics-title { font-size: 18px; font-weight: bold; color: var(--primary); margin-bottom: 5px; text-align: center; }
@@ -243,7 +246,7 @@
            <button id="btn-timer" class="btn btn-primary" onclick="toggleTimer()">開始計時</button>
         </div>
 
-        <div class="card" onclick="openClassics()" style="display:flex; align-items:center; cursor:pointer; border-left: 5px solid #ffb74d;">
+        <div class="card" onclick="openClassics()" ontouchstart="" role="button" tabindex="0" style="display:flex; align-items:center; cursor:pointer; border-left: 5px solid #ffb74d; user-select: none;">
            <div style="font-size: 24px; margin-right: 15px;">📜</div>
            <div style="flex:1;">
              <div style="font-weight:bold; color:var(--text);">經典科目</div>
@@ -981,7 +984,6 @@
     
     function openHallModal(name, info) { document.getElementById('modal-overlay').style.display = 'flex'; document.getElementById('modal-title').innerText = name; document.getElementById('modal-content').innerHTML = `<div style="background:#f1f8e9; padding:10px; border-radius:10px; margin-bottom:10px;"><b>📊 公堂總成績</b><br>${info}</div><div id="hall-members">成員載入中...</div>`; callApi('getHallDetails', {hall:name}).then(res => { var h = res.list.map(m => `<div class="member-row"><span>${m.name}</span><span>開${m.s}/渡${m.c}/班${m.cl}</span></div>`).join(''); document.getElementById('hall-members').innerHTML = h; }); }
     function updateMarquee() { var msg = document.getElementById('adm-marquee').value; if(!msg) return; callApi('updateMarquee', {msg:msg}).then(r => { alert(r.msg); document.getElementById('marquee-text').innerText = msg; }); }
-    function loadAdminFilters() { if(Object.keys(menuConfig).length > 0) { initAdminDropdowns(); } else { callApi('getConfig').then(cfg => { menuConfig = cfg.menu; initAdminDropdowns(); }); } } 
     function runAdminQuery() { try { if(Object.keys(menuConfig).length === 0) { alert("系統資料載入中，請稍後再試..."); return; } var filters = { major: document.getElementById('adm-maj').value, minor: document.getElementById('adm-min').value, hasSport: document.getElementById('f-sport').checked, hasRead: document.getElementById('f-read').checked, hasSpoke: document.getElementById('f-spoke').checked, hasConv: document.getElementById('f-conv').checked, hasClass: document.getElementById('f-class').checked }; var mode = document.getElementById('adm-mode').value; var dateVal = ""; if(mode === 'date') dateVal = document.getElementById('adm-date').value; if(mode === 'month') dateVal = document.getElementById('adm-month').value; loading(true); callApi('getAdminReport', {filters:filters, mode:mode, dateVal:dateVal}).then(res => { loading(false); if(res.error) { alert("系統錯誤: " + res.error); return; } if(!res.list || res.list.length === 0) { document.getElementById('admin-report').style.display = 'block'; document.getElementById('admin-report').innerHTML = "<div style='text-align:center; color:#666; padding:10px;'>⚠️ 查無符合條件的資料</div>"; document.getElementById('admin-list').innerHTML = ""; return; } var st = res.stats; var repHtml = `<div><b>[${mode === 'all' ? '全部歷史' : dateVal}]</b></div><div>篩選人數: <b>${st.count}</b></div><div>累計開口: ${st.totalSpoke} | 渡眾: ${st.totalConv} | 入班: ${st.totalClass}</div><div>運動人次: ${st.totalSport}</div>`; document.getElementById('admin-report').innerHTML = repHtml; document.getElementById('admin-report').style.display = 'block'; var listHtml = res.list.map(u => { var badges = ""; if(u.sportCount > 0) badges += `<span style='background:#8bc34a'>運${u.sportCount}</span>`; if(u.readCount > 0) badges += `<span style='background:#81d4fa'>讀${u.readCount}</span>`; if(u.spoke > 0) badges += `<span style='background:#ff8a80'>開${u.spoke}</span>`; if(u.conv > 0) badges += `<span style='background:#ffd54f'>渡${u.conv}</span>`; return `<div class="admin-row"><div style="flex:1"><div style="font-weight:bold;">${u.name} <span onclick="openAdminCRM('${u.name}')" style="cursor:pointer; margin-left:5px;">📒</span></div><div style="font-size:10px; color:#999;">${u.minor}</div></div><div class="admin-stat-badges" style="text-align:right;">${badges}</div></div>`; }).join(''); document.getElementById('admin-list').innerHTML = listHtml; }).catch(err => { loading(false); alert("連線失敗: " + err); }); } catch(e) { loading(false); alert("前端錯誤: " + e.message); } }
     function sendBroadcast() { var msg = document.getElementById('broadcast-msg').value; if (!msg) { alert("請輸入訊息內容"); return; } var time = document.getElementById('broadcast-time').value; if(confirm("確定要發送這則通知給所有人嗎？")) { loading(true); callApi('broadcast', {msg: msg, time: time}).then(res => { loading(false); if (res.success) { alert("發送成功"); document.getElementById('broadcast-msg').value = ""; } else { alert("發送失敗: " + res.msg); } }); } }
     function loadGlobalLogs(){ var c = document.getElementById('log-container'); c.innerHTML = '<div style="padding:20px; text-align:center;">讀取中...</div>'; callApi('getGlobalLogs').then(res => { var h = ""; if(res.list.length==0) h='<div style="padding:20px; text-align:center;">尚無紀錄</div>'; res.list.forEach(function(l){ var color = "#eee"; if(l.action.includes("運動")) color="#e8f5e9"; if(l.action.includes("讀書")) color="#e3f2fd"; if(l.action.includes("回報")) color="#fff3e0"; h += `<div class="log-item"><div class="log-time">${l.time}</div><div class="log-content"><span style="font-weight:bold; color:#555;">${l.user}</span> <span class="log-tag" style="background:${color}">${l.action}</span><span>${l.detail}</span><div style="font-size:9px; color:#bbb;">(${l.hall})</div></div></div>`; }); c.innerHTML = h; }); }
