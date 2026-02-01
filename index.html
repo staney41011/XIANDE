@@ -9,7 +9,7 @@
   
   <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
   <script>
-    const APP_VERSION = "20260109-FullRestore-V1"; 
+    const APP_VERSION = "20260201-ClassicCrawler-V5.2"; 
 
     (function checkUpdate() {
       const savedVersion = localStorage.getItem("app_version");
@@ -166,6 +166,13 @@
     .cms-actions button { margin-left: 2px; padding: 5px 8px; font-size: 12px; background: #f5f5f5; border: 1px solid #ddd; border-radius: 4px; cursor: pointer; }
     .preview-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; margin-top: 5px; }
     .preview-img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 4px; background: #eee; }
+
+    /* 🔴 新增：經典閱讀樣式 */
+    #v-classics { background: #f9f9f9; height: 100%; display: none; flex-direction: column; }
+    #v-classics.active { display: flex; }
+    .classics-content { flex: 1; padding: 20px; font-size: 20px; line-height: 1.8; color: #333; overflow-y: auto; text-align: justify; background: #fff; margin: 10px; border-radius: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+    .classics-ctrl { background: #fff; padding: 15px; border-top: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 -2px 10px rgba(0,0,0,0.05); }
+    .classics-title { font-size: 18px; font-weight: bold; color: var(--primary); margin-bottom: 5px; text-align: center; }
   </style>
 </head>
 <body>
@@ -202,12 +209,44 @@
       <div class="marquee-container"><div id="marquee-text" class="marquee-text">歡迎回到賢德志士修辦系統！</div></div>
     </div>
 
+    <div id="v-classics" class="view-section" style="z-index: 2000; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #fff; display: none; flex-direction: column;">
+       
+       <div style="padding: 15px; background: #fff; border-bottom: 1px solid #eee; display:flex; align-items:center;">
+          <button class="btn" style="width:auto; padding:5px 10px; margin-right:10px; background:#eee; color:#555;" onclick="backToMenu()">⬅️</button>
+          <div style="flex:1;">
+             <div id="classics-nav-title" style="font-weight:bold; font-size:16px;">經典科目</div>
+             <div id="classics-subtitle" style="font-size:11px; color:#999;">請選擇科目</div>
+          </div>
+          <button class="btn btn-warn" style="width: auto; font-size:12px; padding:5px 10px;" onclick="closeClassics()">關閉</button>
+       </div>
+
+       <div id="classics-menu-list" style="flex:1; overflow-y:auto; padding:10px;">
+          <div style="text-align:center; margin-top:20px; color:#999;">載入中...</div>
+       </div>
+
+       <div id="classics-reader" style="flex:1; overflow-y:auto; padding:20px; display:none; font-size: 20px; line-height: 1.8; text-align: justify;">
+          </div>
+
+       <div id="classics-ctrl-bar" style="padding: 10px; border-top: 1px solid #eee; display: none; gap: 10px;">
+          <button id="btn-tts" class="btn" style="background:var(--blue); flex:1;" onclick="toggleTTS()">🔊 語音伴讀</button>
+       </div>
+    </div>
+
     <div class="viewport">
       <div id="v-home" class="view-section active">
         <div class="card">
            <div class="help-btn" onclick="alert('點擊「開始計時」累積讀書時間。\n離開網頁會自動暫停。')">?</div>
            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;"><span>📖 讀書計時</span><span id="timer-display" style="font-size:20px; font-weight:bold; color:#ccc;">00:00</span></div>
            <button id="btn-timer" class="btn btn-primary" onclick="toggleTimer()">開始計時</button>
+        </div>
+
+        <div class="card" onclick="openClassics()" style="display:flex; align-items:center; cursor:pointer; border-left: 5px solid #ffb74d;">
+           <div style="font-size: 24px; margin-right: 15px;">📜</div>
+           <div style="flex:1;">
+             <div style="font-weight:bold; color:var(--text);">經典科目</div>
+             <div style="font-size:11px; color:#999;">論語、孟子... 點擊閱讀</div>
+           </div>
+           <div style="color:var(--primary);">Go &gt;</div>
         </div>
         
         <div class="card" style="border-left: 5px solid #00c300;">
@@ -280,7 +319,7 @@
            <button class="btn btn-warn" onclick="logout()" style="width:100%; margin-top:15px; font-size:12px;">登出</button>
         </div>
         <div class="card">
-           <div class="calendar-ctrl"><button onclick="changeMonth(-1)"><</button><span id="cal-title" style="font-weight:bold;">--</span><button onclick="changeMonth(1)">></button></div>
+           <div class="calendar-ctrl"><button onclick="changeMonth(-1)">&lt;</button><span id="cal-title" style="font-weight:bold;">--</span><button onclick="changeMonth(1)">&gt;</button></div>
            <div id="calendar-area" class="calendar-grid"></div>
            <div id="profile-stats" class="profile-stats"></div>
            <div class="profile-logs"><h5>📅 本月明細</h5><div id="profile-log-list"></div></div>
@@ -356,9 +395,22 @@
   </div>
 
   <script>
-    // 🔴 請務必確認這個網址是您的最新部署網址 (Web App URL)
+    // 🔴 請務必填入您的 Web App URL
     const API_URL = "https://script.google.com/macros/s/AKfycbxHe88NVoiJkAt2pvBnCYUk_xGul1FhXTAj0kyAXA9GEIddXB1AD8j4gtjhbDEASPSr/exec";
     
+    // 🔴 預設經典內容 (初始值)
+    let CLASSICS_CONTENT = "";
+
+    // 🔴 變數：Wake Lock 與 計時
+    let wakeLock = null;
+    let classicsStartTime = 0;
+    let ttsUtterance = null;
+    
+    // 🔴 經典系統變數
+    let classicsMenuData = {}; // 存後端回傳的目錄結構
+    let currentSubject = null;    // 目前選中的科目
+    let currentChapter = null; // 目前選中的篇章
+
     var gUser=null, gPass=null, gData={}, menuConfig={}, crmData=[];
     var allEvents = [], activeFilters = [], shareDataList = [];
     var cmsUploadFiles = []; 
@@ -402,15 +454,17 @@
         if(savedTime) document.getElementById('reminder-time').value = savedTime;
     }
 
-    // 🔴 核心通訊函式：使用純 JSON Body (對應後端最新解析邏輯)
+    // 🔴 核心通訊函式：使用表單參數 'req' 傳送 JSON (最穩定的方式)
     function callApi(action, params) {
         if(!params) params = {};
         params.action = action;
         
+        var formData = new URLSearchParams();
+        formData.append('req', JSON.stringify(params)); 
+        
         return fetch(API_URL, { 
             method: 'POST', 
-            // 不指定 header，使用預設 text/plain，避開 CORS preflight
-            body: JSON.stringify(params) 
+            body: formData 
         })
         .then(res => res.json())
         .then(json => {
@@ -423,6 +477,181 @@
     }
     
     function loading(x){ document.getElementById('loading').style.display = x?'flex':'none'; }
+
+    // 🔴 螢幕恆亮 API (Wake Lock)
+    async function requestWakeLock() {
+      if ('wakeLock' in navigator) {
+        try {
+          wakeLock = await navigator.wakeLock.request('screen');
+          console.log('Wake Lock active');
+          wakeLock.addEventListener('release', () => {
+            console.log('Wake Lock released');
+          });
+        } catch (err) {
+          console.error(`${err.name}, ${err.message}`);
+        }
+      }
+    }
+    
+    function releaseWakeLock() {
+      if(wakeLock !== null) {
+        wakeLock.release().then(() => { wakeLock = null; });
+      }
+    }
+
+    // 🔴 1. 開啟經典模式 (載入目錄)
+    function openClassics() {
+        document.getElementById('game-screen').children[1].style.display = 'none';
+        document.getElementById('v-classics').classList.add('active');
+        
+        // 重置狀態
+        currentSubject = null;
+        currentChapter = null;
+        showSubjectList(); // 顯示科目列表
+        
+        // 呼叫後端抓取目錄
+        callApi('getClassicsMenu').then(res => {
+            if(res.success) {
+                classicsMenuData = res.menu;
+                showSubjectList();
+            } else {
+                document.getElementById('classics-menu-list').innerHTML = `<div style="text-align:center; color:red;">${res.error || "載入失敗，請確認 Google Sheet [ClassicsMenu] 是否設定正確"}</div>`;
+            }
+        });
+    }
+
+    // 🔴 2. 顯示科目列表 (第一層)
+    function showSubjectList() {
+        currentSubject = null;
+        document.getElementById('classics-nav-title').innerText = "📚 經典科目";
+        document.getElementById('classics-subtitle').innerText = "請選擇科目";
+        document.getElementById('classics-menu-list').style.display = 'block';
+        document.getElementById('classics-reader').style.display = 'none';
+        document.getElementById('classics-ctrl-bar').style.display = 'none';
+        
+        var html = "";
+        var subjects = Object.keys(classicsMenuData);
+        if (subjects.length === 0) {
+           html = "<div style='text-align:center; color:#ccc; margin-top:20px;'>載入中...</div>";
+        } else {
+           subjects.forEach(subject => {
+               html += `<div class="cms-item" onclick="showChapterList('${subject}')" style="padding:15px; font-size:16px; font-weight:bold; cursor:pointer;">📖 ${subject} <span style="float:right; color:#ccc;">></span></div>`;
+           });
+        }
+        document.getElementById('classics-menu-list').innerHTML = html;
+    }
+
+    // 🔴 3. 顯示篇章列表 (第二層)
+    function showChapterList(subjectName) {
+        currentSubject = subjectName;
+        document.getElementById('classics-nav-title').innerText = subjectName;
+        document.getElementById('classics-subtitle').innerText = "請選擇篇章";
+        
+        var chapters = classicsMenuData[subjectName];
+        var html = "";
+        chapters.forEach(ch => {
+            // ch.title 是篇名, ch.sheet 是對應的 Sheet 名稱
+            html += `<div class="cms-item" onclick="loadChapterContent('${ch.title}', '${ch.sheet}')" style="padding:15px; border-bottom:1px solid #eee; cursor:pointer;">${ch.title}</div>`;
+        });
+        document.getElementById('classics-menu-list').innerHTML = html;
+    }
+
+    // 🔴 4. 載入並顯示內容 (第三層)
+    function loadChapterContent(title, sheetName) {
+        currentChapter = title;
+        document.getElementById('classics-menu-list').style.display = 'none';
+        document.getElementById('classics-reader').style.display = 'block';
+        document.getElementById('classics-ctrl-bar').style.display = 'flex'; // 顯示控制列
+        document.getElementById('classics-nav-title').innerText = title;
+        document.getElementById('classics-subtitle').innerText = "閱讀計時中... 螢幕恆亮";
+        
+        document.getElementById('classics-reader').innerHTML = '<div style="text-align:center; margin-top:50px;"><div class="spinner"></div><br>載入經文中...</div>';
+        
+        // 開始計時 & 恆亮
+        classicsStartTime = Date.now();
+        requestWakeLock();
+
+        callApi('getClassicContent', {targetSheet: sheetName}).then(res => {
+             if(res.success) {
+                 // 更新全域變數，讓朗讀功能讀到正確的內容
+                 CLASSICS_CONTENT = res.content; 
+                 document.getElementById('classics-reader').innerHTML = res.content;
+             } else {
+                 document.getElementById('classics-reader').innerHTML = `<div style="color:red; text-align:center;">無法讀取內容：${res.error}</div>`;
+             }
+        });
+    }
+
+    // 🔴 5. 返回按鈕邏輯
+    function backToMenu() {
+        if (document.getElementById('classics-reader').style.display === 'block') {
+            // 如果在閱讀內文，先結算時間
+            calculateReadTime();
+            releaseWakeLock(); // 關閉恆亮
+            if(window.speechSynthesis) window.speechSynthesis.cancel(); // 停止語音
+            showChapterList(currentSubject); // 返回篇章列表
+        } else if (currentSubject) {
+            // 如果在篇章列表，返回科目單
+            showSubjectList();
+        } else {
+            // 如果在科目單，就關閉
+            closeClassics();
+        }
+    }
+
+    // 🔴 6. 結算時間 (獨立出來方便呼叫)
+    function calculateReadTime() {
+        if(!classicsStartTime) return;
+        var durationSec = Math.floor((Date.now() - classicsStartTime) / 1000);
+        classicsStartTime = 0; // 重置
+        
+        if(durationSec > 5) { // 讀超過5秒才紀錄
+           gData.task_read_time = (gData.task_read_time || 0) + durationSec;
+           var min = Math.floor(durationSec / 60);
+           // 背景同步，不阻擋 UI
+           callApi('saveGameData', {
+              u:gUser, p:gPass, data:gData, 
+              log: { action: "讀經", detail: `${currentChapter || '經典'} (${min}分${durationSec%60}秒)` }
+           }).then(() => {
+              renderUI(); // 更新首頁時間顯示
+           });
+        }
+    }
+
+    // 修改原本的 closeClassics
+    function closeClassics() {
+        calculateReadTime();
+        if(window.speechSynthesis) window.speechSynthesis.cancel();
+        releaseWakeLock();
+        document.getElementById('v-classics').classList.remove('active');
+        document.getElementById('game-screen').children[1].style.display = 'flex';
+    }
+
+    function toggleTTS() {
+        if (!window.speechSynthesis) { alert("您的裝置不支援語音朗讀"); return; }
+        if (window.speechSynthesis.speaking) {
+            if (window.speechSynthesis.paused) {
+                window.speechSynthesis.resume();
+                document.getElementById('btn-tts').innerText = "⏸️ 暫停朗讀";
+            } else {
+                window.speechSynthesis.pause();
+                document.getElementById('btn-tts').innerText = "▶️ 繼續朗讀";
+            }
+        } else {
+            // 開始新的朗讀
+            // 從畫面取得文字 (避免有 HTML 標籤)
+            var text = document.getElementById('classics-reader').innerText;
+            ttsUtterance = new SpeechSynthesisUtterance(text);
+            ttsUtterance.lang = "zh-TW"; 
+            ttsUtterance.rate = 1; 
+            window.speechSynthesis.speak(ttsUtterance);
+            document.getElementById('btn-tts').innerText = "⏸️ 暫停朗讀";
+            
+            ttsUtterance.onend = function() {
+                document.getElementById('btn-tts').innerText = "🔊 語音伴讀";
+            };
+        }
+    }
 
     // ... Share Logic ...
     function loadShareData() {
@@ -556,6 +785,7 @@
     function toggleFilter(cat, el) { if(cat === 'all') { activeFilters = []; var chips = document.querySelectorAll('.chip'); chips.forEach(c => c.classList.remove('active')); el.classList.add('active'); } else { document.querySelector('.chip:first-child').classList.remove('active'); if(activeFilters.includes(cat)) { activeFilters = activeFilters.filter(c => c !== cat); el.classList.remove('active'); } else { activeFilters.push(cat); el.classList.add('active'); } } renderEventList(); }
     function renderEventList() { var today = new Date(); today.setHours(0,0,0,0); var html = ""; var hasScrolled = false; var historyAdded = false; var weekDays = ["日", "一", "二", "三", "四", "五", "六"]; allEvents.forEach((e, index) => { if(activeFilters.length > 0 && !activeFilters.includes(e.cat)) return; var dStart = new Date(e.date); var dEnd = new Date(e.end); var isPast = dEnd < today; var isTodayOrFuture = dEnd >= today; if(!historyAdded && isTodayOrFuture && index > 0) { html += `<div class="history-line">以上是歷史活動</div>`; historyAdded = true; } var day = dStart.getDate(); var mon = dStart.getMonth() + 1; var weekStr = weekDays[dStart.getDay()]; var dateRangeStr = ""; if(e.date !== e.end) { var dEndDay = dEnd.getDate(); var dEndMon = dEnd.getMonth() + 1; dateRangeStr = `📅 ${mon}/${day} ~ ${dEndMon}/${dEndDay}`; day = `${day}-${dEndDay}`; var diffTime = dStart - today; var diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); if(diffDays > 0) dateRangeStr += ` (還有${diffDays}天)`; else if(diffDays <= 0 && dEnd >= today) dateRangeStr += ` (進行中)`; } else { var diffTime = dStart - today; var diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); if(diffDays === 0) dateRangeStr = "<span style='color:red; font-weight:bold;'>今天!</span>"; else if(diffDays > 0) dateRangeStr = `還有 ${diffDays} 天`; else dateRangeStr = "已結束"; } var cardId = ""; if(!hasScrolled && isTodayOrFuture) { cardId = "id='today-focus'"; hasScrolled = true; } var noteHtml = e.note ? `<div class="event-note">${e.note}</div>` : ""; html += `<div ${cardId} class="event-card ${isPast?'past':''} ${cardId?'focus':''}"><div class="event-date-box" style="border-left: 5px solid ${getTagColor(e.cat)}"><div class="event-month">${mon}月</div><div class="event-day" style="font-size:${day.toString().length>2?'14px':'18px'}">${day}</div><div style="font-size:10px; margin-top:-2px;">週${weekStr}</div></div><div class="event-info"><div class="event-title">${e.name}</div>${noteHtml}<div class="event-meta"><span class="tag" style="background:${getTagColor(e.cat)}">${e.cat}</span><span>📍 ${e.loc || "--"}</span><span style="flex:1; text-align:right; font-size:10px; color:#999;">${dateRangeStr}</span></div></div></div>`; }); document.getElementById('event-list').innerHTML = html || "<div style='text-align:center; color:#999; padding:20px;'>沒有活動</div>"; setTimeout(() => { var focusEl = document.getElementById('today-focus'); if(focusEl) focusEl.scrollIntoView({behavior: "smooth", block: "center"}); }, 300); }
     function getTagColor(cat) { if(!cat) return "#ccc"; if(cat.includes("仙佛")) return "#fbc02d"; if(cat.includes("賢德")) return "#8bc34a"; if(cat.includes("中央")) return "#ff7043"; if(cat.includes("中") || cat.includes("北") || cat.includes("南")) return "#29b6f6"; return "#9e9e9e"; }
+    
     function loadCRM(targetUser) { var u = targetUser || gUser; if(!targetUser) document.getElementById('crm-list').innerHTML = '<div style="text-align:center; color:#999;">載入中...</div>'; callApi('getCRM', {u:gUser, target:u}).then(res => { if(res.error) { alert(res.error); return; } var list = res.list || []; if(targetUser) { var html = `<h4>👤 ${targetUser} 的記事本</h4>`; if(list.length === 0) html += "<p>尚無資料</p>"; list.forEach(item => { var stClass = "s-plan"; if(item.status.includes("開口")) stClass = "s-spoke"; if(item.status.includes("入班") || item.status.includes("求道")) stClass = "s-join"; var rInfo = item.remind ? `<br><small>⏰ ${item.remind} (${item.repeat})</small>` : ""; html += `<div class="crm-card" style="pointer-events:none; background:#f9f9f9;"><div class="crm-header"><div class="crm-name">${item.name}</div><div class="crm-status ${stClass}">${item.status}</div></div><div class="crm-note">${item.todo ? "📝 待辦: " + item.todo : (item.note || "無備註")}${rInfo}</div></div>`; }); document.getElementById('modal-content').innerHTML = html; } else { crmData = list; renderCRM(); } }); }
     function renderCRM() { var todoHtml = "", listHtml = ""; crmData.forEach(item => { if(item.todo) { todoHtml += `<div class="todo-item"><input type="checkbox" class="todo-check" onclick="completeTodo(${item.id})"><div class="todo-text"><div style="font-weight:bold;">${item.name}</div><div>${item.todo}</div></div></div>`; } var stClass = "s-plan"; if(item.status.includes("開口")) stClass = "s-spoke"; if(item.status.includes("入班") || item.status.includes("求道")) stClass = "s-join"; var rIcon = item.remind ? "⏰" : ""; listHtml += `<div class="crm-card" onclick='editCRM(${JSON.stringify(item).replace(/'/g, "'")})'><div class="crm-header"><div class="crm-name">${item.name} ${rIcon}</div><div class="crm-status ${stClass}">${item.status}</div></div><div class="crm-note">${item.todo ? "📝 " + item.todo : (item.note || "無備註")}</div></div>`; }); document.getElementById('crm-todo-list').innerHTML = todoHtml || '<div style="text-align:center; color:#999; font-size:12px;">無待辦事項</div>'; document.getElementById('crm-list').innerHTML = listHtml || '<div style="text-align:center; color:#999; margin-top:20px;">點擊右下角 + 新增名單</div>'; }
     function editCRM(item) { var title = item ? "編輯資料" : "新增名單"; var isNew = !item; item = item || { id:0, name:"", status:"預計渡眾", todo:"", note:"", remind:"", repeat:"none" }; var html = `<input id="e-id" type="hidden" value="${item.id}"><div style="margin-bottom:10px;"><label>姓名</label><input id="e-name" class="input-field" value="${item.name}" placeholder="對象姓名"></div><div style="margin-bottom:10px;"><label>狀態</label><select id="e-status" class="input-field"><option ${item.status=='預計渡眾'?'selected':''}>預計渡眾</option><option ${item.status=='已開口'?'selected':''}>已開口</option><option ${item.status=='跟進中'?'selected':''}>跟進中</option><option ${item.status=='已求道'?'selected':''}>已求道</option><option ${item.status=='已入班'?'selected':''}>已入班</option></select></div><div style="margin-bottom:10px;"><label>下一步 / 待辦</label><input id="e-todo" class="input-field" value="${item.todo}" placeholder="例如：約吃飯、送書"></div><div style="margin-bottom:10px; background:#f0f4c3; padding:10px; border-radius:10px;"><label>⏰ 設定提醒 (選填)</label><input id="e-remind" type="datetime-local" class="input-field" value="${item.remind}"><label>重複頻率</label><select id="e-repeat" class="input-field"><option value="none" ${item.repeat=='none'?'selected':''}>單次提醒</option><option value="daily" ${item.repeat=='daily'?'selected':''}>每天</option><option value="weekly" ${item.repeat=='weekly'?'selected':''}>每週</option><option value="monthly" ${item.repeat=='monthly'?'selected':''}>每月</option></select></div><div style="margin-bottom:15px;"><label>備註</label><textarea id="e-note" class="input-field" rows="3">${item.note}</textarea></div><button class="btn btn-primary" onclick="saveCRMItem()">💾 儲存</button>${!isNew ? `<button class="btn" style="background:#eee; color:#f44336; margin-top:10px;" onclick="deleteCRMItem(${item.id})">🗑️ 刪除</button>` : ''}`; document.getElementById('modal-title').innerText = title; document.getElementById('modal-content').innerHTML = html; document.getElementById('modal-overlay').style.display = 'flex'; }
@@ -563,34 +793,94 @@
     function deleteCRMItem(id) { if(!confirm("確定要刪除此筆資料嗎？")) return; loading(true); callApi('deleteCRM', {u:gUser, idx:id}).then(res => { loading(false); closeModal(); loadCRM(); }); }
     function completeTodo(id) { if(!confirm("完成此待辦事項？")) return; var item = crmData.find(x => x.id == id); if(item) { item.todo = ""; loading(true); callApi('saveCRM', {u:gUser, item:item}).then(res => { loading(false); loadCRM(); }); } }
     function openAdminCRM(userName) { document.getElementById('modal-overlay').style.display = 'flex'; document.getElementById('modal-title').innerText = "載入中..."; document.getElementById('modal-content').innerHTML = "請稍候..."; loadCRM(userName); }
+    
     function initRegDropdowns(){ var s=document.getElementById('r-maj'), opts="<option disabled selected>選擇團隊</option>"; for(var k in menuConfig){ opts += `<option value="${k}">${k}</option>`; } s.innerHTML = opts; }
     function initAdminDropdowns(){ var s=document.getElementById('adm-maj'), opts="<option value='全部'>全部團隊</option>"; for(var k in menuConfig){ opts += `<option value="${k}">${k}</option>`; } s.innerHTML = opts; admUpdMin(); }
-    function updMinor(){ var m=document.getElementById('r-maj').value, s=document.getElementById('r-min'); s.innerHTML=""; if(menuConfig[m]) menuConfig[m].forEach(x => { var o=document.createElement('option'); o.value=x; o.innerText=x; s.appendChild(o); }); }
-    function admUpdMin(){ var m=document.getElementById('adm-maj').value, s=document.getElementById('adm-min'); s.innerHTML="<option value='全部'>全部公堂</option>"; if(m !== '全部' && menuConfig[m]) { menuConfig[m].forEach(x => { var o=document.createElement('option'); o.value=x; o.innerText=x; s.appendChild(o); }); } }
-    function toggleAuth(t){ document.getElementById('f-login').style.display=t=='login'?'block':'none'; document.getElementById('f-reg').style.display=t=='register'?'block':'none'; }
-    function nav(t){ ['home','orchard','profile','admin','crm','events'].forEach(x=>{ document.getElementById('v-'+x).classList.remove('active'); document.getElementById('n-'+x).classList.remove('active'); }); document.getElementById('v-'+t).classList.add('active'); document.getElementById('n-'+t).classList.add('active'); }
-    function closeModal() { document.getElementById('modal-overlay').style.display = 'none'; }
-    function toggleAdmDateInput() { var mode = document.getElementById('adm-mode').value; document.getElementById('adm-date-box').style.display = mode==='date' ? 'block' : 'none'; document.getElementById('adm-month-box').style.display = mode==='month' ? 'block' : 'none'; }
-    function doReg(){ var u=document.getElementById('r-u').value, p=document.getElementById('r-p').value, maj=document.getElementById('r-maj').value, min=document.getElementById('r-min').value; if(!u||!p||!maj||!min){ alert("請填寫完整"); return; } loading(true); callApi('register', {u:u, p:p, maj:maj, min:min}).then(r => { loading(false); alert(r.msg); if(r.success) toggleAuth('login'); }); }
-    function doLogin(){ var u=document.getElementById('l-u').value, p=document.getElementById('l-p').value; loading(true); callApi('login', {u:u, p:p}).then(r => { loading(false); if(r.success){ gUser=u; gPass=p; gData=r.gameData; localStorage.setItem("xd_u",u); localStorage.setItem("xd_p",p); if(window.OneSignal) OneSignal.User.addTag("user", u); loadShareData(); lastLogTime = new Date().getTime(); if(gData.teamMajor === "主領班") { document.getElementById('n-admin').style.display = 'block'; } enterGame(); } else { alert(r.msg); } }); }
-    function enterGame(){ document.getElementById('auth-screen').style.display='none'; document.getElementById('game-screen').style.display='flex'; renderUI(); }
-    function logout(){ if(confirm("登出?")){ localStorage.removeItem("xd_p"); location.reload(); } }
-    function renderUI(){ document.getElementById('ui-team').innerText = gData.teamFull; document.getElementById('p-job').innerText = gData.job; updateDashboard(); var ck = document.getElementById('ck-sport'); if(gData.task_sport_done){ ck.style.background='var(--primary)'; ck.style.borderColor='var(--primary)'; } else { ck.style.background='transparent'; ck.style.borderColor='#ddd'; } updTimer(gData.task_read_time||0); }
-    function addCount(id) { var el = document.getElementById(id); el.value = parseInt(el.value || 0) + 1; updateDashboard(); }
-    function minusCount(id) { var el = document.getElementById(id); var val = parseInt(el.value || 0); if (val > 0) { el.value = val - 1; updateDashboard(); } }
-    function updateDashboard() { var addS = parseInt(document.getElementById('inp-spoke').value||0); var addC = parseInt(document.getElementById('inp-conv').value||0); var addCl = parseInt(document.getElementById('inp-class').value||0); var totalS = (gData.spoke_count||0) + addS; var totalC = (gData.convert_count||0) + addC; var totalCl = (gData.class_count||0) + addCl; document.getElementById('today-dash').innerText = `📊 今日已累積：開口 ${totalS} | 渡眾 ${totalC} | 入班 ${totalCl}`; }
-    function toggleTimer(){ var b = document.getElementById('btn-timer'); if(isTimer){ clearInterval(timerInt); isTimer=false; b.innerText="繼續計時"; b.className="btn btn-primary"; saveData({action:"讀書", detail:"累計 "+Math.floor(gData.task_read_time/60)+" 分鐘"}); } else { timerInt = setInterval(function(){ gData.task_read_time=(gData.task_read_time||0)+1; updTimer(gData.task_read_time); }, 1000); isTimer=true; b.innerText="暫停計時"; b.className="btn btn-warn"; } }
-    function updTimer(s){ var m=Math.floor(s/60), sec=s%60; document.getElementById('timer-display').innerText = (m<10?"0"+m:m)+":"+(sec<10?"0"+sec:sec); }
-    function toggleSport(){ if(gData.task_sport_done) return; gData.task_sport_done = true; renderUI(); saveData({action:"運動", detail:"完成今日30分鐘運動！"}); }
-    function saveAchievements(){ var addS = parseInt(document.getElementById('inp-spoke').value||0); var addC = parseInt(document.getElementById('inp-conv').value||0); var addCl = parseInt(document.getElementById('inp-class').value||0); if(addS==0 && addC==0 && addCl==0) { alert("請輸入數量"); return; } gData.spoke_count = (gData.spoke_count||0) + addS; gData.convert_count = (gData.convert_count||0) + addC; gData.class_count = (gData.class_count||0) + addCl; loading(true); var msg = `開口${addS}, 渡眾${addC}, 入班${addCl}`; callApi('saveGameData', {u:gUser, p:gPass, data:gData, log:{action:"回報成果", detail: msg}}).then(r => { loading(false); document.getElementById('inp-spoke').value=0; document.getElementById('inp-conv').value=0; document.getElementById('inp-class').value=0; renderUI(); alert("📜 紀錄已同步！"); }); }
-    function saveData(logObj){ callApi('saveGameData', {u:gUser, p:gPass, data:gData, log:logObj}); }
-    function setLocalReminder() { var t = document.getElementById('reminder-time').value; localStorage.setItem("reminder_time", t); if('Notification' in window) Notification.requestPermission(); alert("提醒時間已設定為 " + t); }
-    function changeMonth(delta) { curMonth += delta; if(curMonth > 12) { curMonth = 1; curYear++; } if(curMonth < 1) { curMonth = 12; curYear--; } loadCalendar(); }
-    function loadCalendar() { var mStr = curYear + "-" + (curMonth<10?"0"+curMonth:curMonth); document.getElementById('cal-title').innerText = mStr; document.getElementById('calendar-area').innerHTML = "Loading..."; document.getElementById('profile-stats').innerHTML = ""; document.getElementById('profile-log-list').innerHTML = ""; callApi('getCalendarData', {u:gUser, year:curYear, month:curMonth}).then(res => { var daysInMonth = new Date(curYear, curMonth, 0).getDate(); var html = ""; for(var d=1; d<=daysInMonth; d++) { var dStr = mStr + "-" + (d<10?"0"+d:d); var dayData = res.cal[dStr]; var cls = "cal-day"; if(dayData) { var count = 0; if(dayData.read) count++; if(dayData.sport) count++; if(dayData.achieve) count++; if(count > 0) cls += " cal-fill-" + count; } html += `<div class="${cls}">${d}</div>`; } document.getElementById('calendar-area').innerHTML = html; var s = res.stats; document.getElementById('profile-stats').innerHTML = `<b>📊 ${mStr} 月報表</b><br>運動: ${s.sportDays}天 | 讀書: ${s.readDays}天 | 開口: ${s.totalSpoke}`; var logHtml = res.logs.map(l => `<div class="log-item"><div class="log-time" style="width:80px;">${l.time}</div><div class="log-content"><b>${l.action}</b> ${l.detail}</div></div>`).join(''); document.getElementById('profile-log-list').innerHTML = logHtml || "無紀錄"; }); }
-    function loadOrchard(){ document.getElementById('orchard-container').innerHTML = 'Loading...'; callApi('getOrchardData').then(data => { var html = ""; for(var key in data){ var h = data[key]; var fruits = ""; var sp = Number(h.spoke)||0; var cv = Number(h.convert)||0; var cl = Number(h.joinClass)||0; var redFruits = Math.floor(sp / 10); var totalPoints = redFruits + cv + cl; var treeClass = "tree-scale-s"; if(totalPoints > 20) treeClass = "tree-scale-l"; else if(totalPoints > 5) treeClass = "tree-scale-m"; for(var i=0; i<redFruits && i<10; i++) fruits += '<div class="fruit red"></div>'; for(var i=0; i<cv && i<10; i++) fruits += '<div class="fruit gold"></div>'; for(var i=0; i<cl && i<10; i++) fruits += '<div class="fruit blue"></div>'; if(totalPoints == 0) fruits = '<span style="font-size:10px; color:#fff;">種子</span>'; var info = `開口:${sp} 渡眾:${cv} 入班:${cl}`; html += `<div class="tree-container ${treeClass}" onclick="openHallModal('${h.name}', '${info}')"><div class="tree-canopy">${fruits}</div><div class="tree-trunk"></div><div class="tree-label">${h.name}<br><span style="font-size:10px;">${h.members}人</span></div></div>`; } document.getElementById('orchard-container').innerHTML = html || "無資料"; if(document.getElementById('dash-spoke')) { document.getElementById('dash-spoke').innerText = data.totalSpoke || 0; document.getElementById('dash-conv').innerText = data.totalConv || 0; document.getElementById('dash-class').innerText = data.totalClass || 0; } loadGlobalLogs(); }); }
+    
+    // 🔴 缺少的函式補完了
+    function changeMonth(delta) { 
+        curMonth += delta; 
+        if(curMonth > 12) { curMonth = 1; curYear++; } 
+        if(curMonth < 1) { curMonth = 12; curYear--; } 
+        loadCalendar(); 
+    }
+    
+    function loadCalendar() { 
+        var mStr = curYear + "-" + (curMonth<10?"0"+curMonth:curMonth); 
+        document.getElementById('cal-title').innerText = mStr; 
+        document.getElementById('calendar-area').innerHTML = "Loading..."; 
+        document.getElementById('profile-stats').innerHTML = ""; 
+        document.getElementById('profile-log-list').innerHTML = ""; 
+        
+        callApi('getCalendarData', {u:gUser, year:curYear, month:curMonth}).then(res => { 
+            var daysInMonth = new Date(curYear, curMonth, 0).getDate(); 
+            var html = ""; 
+            for(var d=1; d<=daysInMonth; d++) { 
+                var dStr = mStr + "-" + (d<10?"0"+d:d); 
+                var dayData = res.cal[dStr]; 
+                var cls = "cal-day"; 
+                if(dayData) { 
+                    var count = 0; 
+                    if(dayData.read) count++; 
+                    if(dayData.sport) count++; 
+                    if(dayData.achieve) count++; 
+                    if(count > 0) cls += " cal-fill-" + count; 
+                } 
+                html += `<div class="${cls}">${d}</div>`; 
+            } 
+            document.getElementById('calendar-area').innerHTML = html; 
+            var s = res.stats; 
+            document.getElementById('profile-stats').innerHTML = `<b>📊 ${mStr} 月報表</b><br>運動: ${s.sportDays}天 | 讀書: ${s.readDays}天 | 開口: ${s.totalSpoke}`; 
+            var logHtml = res.logs.map(l => `<div class="log-item"><div class="log-time" style="width:80px;">${l.time}</div><div class="log-content"><b>${l.action}</b> ${l.detail}</div></div>`).join(''); 
+            document.getElementById('profile-log-list').innerHTML = logHtml || "無紀錄"; 
+        }); 
+    }
+    
+    // 🔴 這裡我幫您加上了「儀表板數字加總邏輯」，請放心複製
+    function loadOrchard(){ 
+      document.getElementById('orchard-container').innerHTML = 'Loading...'; 
+      callApi('getOrchardData').then(data => { 
+        var html = ""; 
+        // 🔴 新增：變數初始化
+        var totalS = 0, totalC = 0, totalCl = 0; 
+
+        for(var key in data){ 
+          var h = data[key]; 
+          // 🔴 新增：累加運算
+          var s = Number(h.spoke)||0; 
+          var c = Number(h.convert)||0; 
+          var cl = Number(h.joinClass)||0;
+          totalS += s; totalC += c; totalCl += cl;
+
+          var fruits = ""; 
+          var redFruits = Math.floor(s / 10); 
+          var totalPoints = redFruits + c + cl; 
+          var treeClass = "tree-scale-s"; 
+          if(totalPoints > 20) treeClass = "tree-scale-l"; else if(totalPoints > 5) treeClass = "tree-scale-m"; 
+          for(var i=0; i<redFruits && i<10; i++) fruits += '<div class="fruit red"></div>'; 
+          for(var i=0; i<c && i<10; i++) fruits += '<div class="fruit gold"></div>'; 
+          for(var i=0; i<cl && i<10; i++) fruits += '<div class="fruit blue"></div>'; 
+          if(totalPoints == 0) fruits = '<span style="font-size:10px; color:#fff;">種子</span>'; 
+          var info = `開口:${s} 渡眾:${c} 入班:${cl}`; 
+          html += `<div class="tree-container ${treeClass}" onclick="openHallModal('${h.name}', '${info}')"><div class="tree-canopy">${fruits}</div><div class="tree-trunk"></div><div class="tree-label">${h.name}<br><span style="font-size:10px;">${h.members}人</span></div></div>`; 
+        } 
+        
+        document.getElementById('orchard-container').innerHTML = html || "無資料"; 
+        
+        // 🔴 新增：更新儀表板數字
+        if(document.getElementById('dash-spoke')) { 
+           document.getElementById('dash-spoke').innerText = totalS; 
+           document.getElementById('dash-conv').innerText = totalC; 
+           document.getElementById('dash-class').innerText = totalCl; 
+        } 
+        
+        loadGlobalLogs(); 
+      }); 
+    }
+    
     function openHallModal(name, info) { document.getElementById('modal-overlay').style.display = 'flex'; document.getElementById('modal-title').innerText = name; document.getElementById('modal-content').innerHTML = `<div style="background:#f1f8e9; padding:10px; border-radius:10px; margin-bottom:10px;"><b>📊 公堂總成績</b><br>${info}</div><div id="hall-members">成員載入中...</div>`; callApi('getHallDetails', {hall:name}).then(res => { var h = res.list.map(m => `<div class="member-row"><span>${m.name}</span><span>開${m.s}/渡${m.c}/班${m.cl}</span></div>`).join(''); document.getElementById('hall-members').innerHTML = h; }); }
     function updateMarquee() { var msg = document.getElementById('adm-marquee').value; if(!msg) return; callApi('updateMarquee', {msg:msg}).then(r => { alert(r.msg); document.getElementById('marquee-text').innerText = msg; }); }
-    function loadAdminFilters() { if(Object.keys(menuConfig).length > 0) { initMaj(); } else { callApi('getConfig').then(cfg => { menuConfig = cfg.menu; initMaj(); }); } } 
+    function loadAdminFilters() { if(Object.keys(menuConfig).length > 0) { initAdminDropdowns(); } else { callApi('getConfig').then(cfg => { menuConfig = cfg.menu; initAdminDropdowns(); }); } } 
     function runAdminQuery() { try { if(Object.keys(menuConfig).length === 0) { alert("系統資料載入中，請稍後再試..."); return; } var filters = { major: document.getElementById('adm-maj').value, minor: document.getElementById('adm-min').value, hasSport: document.getElementById('f-sport').checked, hasRead: document.getElementById('f-read').checked, hasSpoke: document.getElementById('f-spoke').checked, hasConv: document.getElementById('f-conv').checked, hasClass: document.getElementById('f-class').checked }; var mode = document.getElementById('adm-mode').value; var dateVal = ""; if(mode === 'date') dateVal = document.getElementById('adm-date').value; if(mode === 'month') dateVal = document.getElementById('adm-month').value; loading(true); callApi('getAdminReport', {filters:filters, mode:mode, dateVal:dateVal}).then(res => { loading(false); if(res.error) { alert("系統錯誤: " + res.error); return; } if(!res.list || res.list.length === 0) { document.getElementById('admin-report').style.display = 'block'; document.getElementById('admin-report').innerHTML = "<div style='text-align:center; color:#666; padding:10px;'>⚠️ 查無符合條件的資料</div>"; document.getElementById('admin-list').innerHTML = ""; return; } var st = res.stats; var repHtml = `<div><b>[${mode === 'all' ? '全部歷史' : dateVal}]</b></div><div>篩選人數: <b>${st.count}</b></div><div>累計開口: ${st.totalSpoke} | 渡眾: ${st.totalConv} | 入班: ${st.totalClass}</div><div>運動人次: ${st.totalSport}</div>`; document.getElementById('admin-report').innerHTML = repHtml; document.getElementById('admin-report').style.display = 'block'; var listHtml = res.list.map(u => { var badges = ""; if(u.sportCount > 0) badges += `<span style='background:#8bc34a'>運${u.sportCount}</span>`; if(u.readCount > 0) badges += `<span style='background:#81d4fa'>讀${u.readCount}</span>`; if(u.spoke > 0) badges += `<span style='background:#ff8a80'>開${u.spoke}</span>`; if(u.conv > 0) badges += `<span style='background:#ffd54f'>渡${u.conv}</span>`; return `<div class="admin-row"><div style="flex:1"><div style="font-weight:bold;">${u.name} <span onclick="openAdminCRM('${u.name}')" style="cursor:pointer; margin-left:5px;">📒</span></div><div style="font-size:10px; color:#999;">${u.minor}</div></div><div class="admin-stat-badges" style="text-align:right;">${badges}</div></div>`; }).join(''); document.getElementById('admin-list').innerHTML = listHtml; }).catch(err => { loading(false); alert("連線失敗: " + err); }); } catch(e) { loading(false); alert("前端錯誤: " + e.message); } }
     function sendBroadcast() { var msg = document.getElementById('broadcast-msg').value; if (!msg) { alert("請輸入訊息內容"); return; } var time = document.getElementById('broadcast-time').value; if(confirm("確定要發送這則通知給所有人嗎？")) { loading(true); callApi('broadcast', {msg: msg, time: time}).then(res => { loading(false); if (res.success) { alert("發送成功"); document.getElementById('broadcast-msg').value = ""; } else { alert("發送失敗: " + res.msg); } }); } }
     function loadGlobalLogs(){ var c = document.getElementById('log-container'); c.innerHTML = '<div style="padding:20px; text-align:center;">讀取中...</div>'; callApi('getGlobalLogs').then(res => { var h = ""; if(res.list.length==0) h='<div style="padding:20px; text-align:center;">尚無紀錄</div>'; res.list.forEach(function(l){ var color = "#eee"; if(l.action.includes("運動")) color="#e8f5e9"; if(l.action.includes("讀書")) color="#e3f2fd"; if(l.action.includes("回報")) color="#fff3e0"; h += `<div class="log-item"><div class="log-time">${l.time}</div><div class="log-content"><span style="font-weight:bold; color:#555;">${l.user}</span> <span class="log-tag" style="background:${color}">${l.action}</span><span>${l.detail}</span><div style="font-size:9px; color:#bbb;">(${l.hall})</div></div></div>`; }); c.innerHTML = h; }); }
