@@ -9,7 +9,7 @@
   
   <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
   <script>
-    const APP_VERSION = "20260201-SmartBookmark-V6.0"; 
+    const APP_VERSION = "20260201-PushDiag-V6.2"; 
 
     (function checkUpdate() {
       const savedVersion = localStorage.getItem("app_version");
@@ -169,13 +169,11 @@
     .preview-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; margin-top: 5px; }
     .preview-img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 4px; background: #eee; }
 
-    /* 🔴 新增：經典閱讀樣式 (包含閱讀進度高亮) */
+    /* 🔴 新增：經典閱讀樣式 */
     #v-classics { background: #f9f9f9; height: 100%; display: none; flex-direction: column; }
     .classics-content { flex: 1; padding: 20px; font-size: 20px; line-height: 1.8; color: #333; overflow-y: auto; text-align: justify; background: #fff; margin: 10px; border-radius: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); scroll-behavior: smooth; }
     .classics-content p { margin-bottom: 15px; padding: 5px; border-radius: 5px; transition: background 0.3s; }
-    /* 當前閱讀段落高亮效果 */
     .reading-active { background-color: #fff9c4; border-left: 4px solid var(--accent); padding-left: 10px; }
-    
     .classics-ctrl { background: #fff; padding: 15px; border-top: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 -2px 10px rgba(0,0,0,0.05); }
     .classics-title { font-size: 18px; font-weight: bold; color: var(--primary); margin-bottom: 5px; text-align: center; }
   </style>
@@ -323,6 +321,9 @@
            <div style="font-size:40px;">🧑‍🌾</div>
            <h3 id="p-job">修道志士</h3>
            <div style="margin-top:15px; text-align:left;"><label style="font-size:12px;">⏰ 設定「記得上線」提醒：</label><input type="time" id="reminder-time" class="input-field" onchange="setLocalReminder()"></div>
+           
+           <button class="btn" style="background:#607d8b; margin-top:10px;" onclick="checkPushStatus()">🔔 檢查此裝置通知狀態</button>
+           
            <button class="btn btn-warn" onclick="logout()" style="width:100%; margin-top:15px; font-size:12px;">登出</button>
         </div>
         <div class="card">
@@ -1071,6 +1072,26 @@
     function runAdminQuery() { try { if(Object.keys(menuConfig).length === 0) { alert("系統資料載入中，請稍後再試..."); return; } var filters = { major: document.getElementById('adm-maj').value, minor: document.getElementById('adm-min').value, hasSport: document.getElementById('f-sport').checked, hasRead: document.getElementById('f-read').checked, hasSpoke: document.getElementById('f-spoke').checked, hasConv: document.getElementById('f-conv').checked, hasClass: document.getElementById('f-class').checked }; var mode = document.getElementById('adm-mode').value; var dateVal = ""; if(mode === 'date') dateVal = document.getElementById('adm-date').value; if(mode === 'month') dateVal = document.getElementById('adm-month').value; loading(true); callApi('getAdminReport', {filters:filters, mode:mode, dateVal:dateVal}).then(res => { loading(false); if(res.error) { alert("系統錯誤: " + res.error); return; } if(!res.list || res.list.length === 0) { document.getElementById('admin-report').style.display = 'block'; document.getElementById('admin-report').innerHTML = "<div style='text-align:center; color:#666; padding:10px;'>⚠️ 查無符合條件的資料</div>"; document.getElementById('admin-list').innerHTML = ""; return; } var st = res.stats; var repHtml = `<div><b>[${mode === 'all' ? '全部歷史' : dateVal}]</b></div><div>篩選人數: <b>${st.count}</b></div><div>累計開口: ${st.totalSpoke} | 渡眾: ${st.totalConv} | 入班: ${st.totalClass}</div><div>運動人次: ${st.totalSport}</div>`; document.getElementById('admin-report').innerHTML = repHtml; document.getElementById('admin-report').style.display = 'block'; var listHtml = res.list.map(u => { var badges = ""; if(u.sportCount > 0) badges += `<span style='background:#8bc34a'>運${u.sportCount}</span>`; if(u.readCount > 0) badges += `<span style='background:#81d4fa'>讀${u.readCount}</span>`; if(u.spoke > 0) badges += `<span style='background:#ff8a80'>開${u.spoke}</span>`; if(u.conv > 0) badges += `<span style='background:#ffd54f'>渡${u.conv}</span>`; return `<div class="admin-row"><div style="flex:1"><div style="font-weight:bold;">${u.name} <span onclick="openAdminCRM('${u.name}')" style="cursor:pointer; margin-left:5px;">📒</span></div><div style="font-size:10px; color:#999;">${u.minor}</div></div><div class="admin-stat-badges" style="text-align:right;">${badges}</div></div>`; }).join(''); document.getElementById('admin-list').innerHTML = listHtml; }).catch(err => { loading(false); alert("連線失敗: " + err); }); } catch(e) { loading(false); alert("前端錯誤: " + e.message); } }
     function sendBroadcast() { var msg = document.getElementById('broadcast-msg').value; if (!msg) { alert("請輸入訊息內容"); return; } var time = document.getElementById('broadcast-time').value; if(confirm("確定要發送這則通知給所有人嗎？")) { loading(true); callApi('broadcast', {msg: msg, time: time}).then(res => { loading(false); if (res.success) { alert("發送成功"); document.getElementById('broadcast-msg').value = ""; } else { alert("發送失敗: " + res.msg); } }); } }
     function loadGlobalLogs(){ var c = document.getElementById('log-container'); c.innerHTML = '<div style="padding:20px; text-align:center;">讀取中...</div>'; callApi('getGlobalLogs').then(res => { var h = ""; if(res.list.length==0) h='<div style="padding:20px; text-align:center;">尚無紀錄</div>'; res.list.forEach(function(l){ var color = "#eee"; if(l.action.includes("運動")) color="#e8f5e9"; if(l.action.includes("讀書")) color="#e3f2fd"; if(l.action.includes("回報")) color="#fff3e0"; h += `<div class="log-item"><div class="log-time">${l.time}</div><div class="log-content"><span style="font-weight:bold; color:#555;">${l.user}</span> <span class="log-tag" style="background:${color}">${l.action}</span><span>${l.detail}</span><div style="font-size:9px; color:#bbb;">(${l.hall})</div></div></div>`; }); c.innerHTML = h; }); }
+    
+    // 🔴 檢查通知狀態函式 (診斷按鈕用)
+    function checkPushStatus() {
+        if (!window.OneSignal) { alert("通知系統尚未載入，請稍候..."); return; }
+        
+        // 1. 檢查瀏覽器權限
+        var perm = Notification.permission;
+        if (perm !== "granted") {
+            alert("⚠️ 您的裝置尚未允許通知 (目前狀態: " + perm + ")\n請到手機設定 -> 瀏覽器 -> 開啟通知權限。");
+            return;
+        }
+
+        // 2. 檢查 OneSignal 訂閱狀態 (v16 API)
+        var isSubscribed = OneSignal.User.PushSubscription.optedIn;
+        if (isSubscribed) {
+            alert("✅ 恭喜！您的裝置已成功訂閱通知。\n(如果還是收不到，請確認是否為 iPhone 且已『加入主畫面』)");
+        } else {
+            alert("⚠️ 權限已開，但尚未訂閱。\n請點擊畫面右下角的紅色鈴鐺圖示來訂閱！");
+        }
+    }
   </script>
 </body>
 </html>
