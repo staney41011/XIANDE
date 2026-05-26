@@ -1,0 +1,716 @@
+// 🔴 請務必填入您的 Web App URL
+const API_URL = "https://script.google.com/macros/s/AKfycbxHe88NVoiJkAt2pvBnCYUk_xGul1FhXTAj0kyAXA9GEIddXB1AD8j4gtjhbDEASPSr/exec";
+
+// 🔴 預設經典內容 (初始值)
+let CLASSICS_CONTENT = "";
+
+// 🔴 變數：Wake Lock 與 計時
+let wakeLock = null;
+let classicsStartTime = 0;
+let ttsUtterance = null;
+let readingObserver = null;
+let currentParagraphIndex = 0; // 當前閱讀段落
+let totalParagraphs = 0; // 總段落數
+
+// 🔴 經典系統變數
+let classicsMenuData = {}; // 存後端回傳的目錄結構
+let currentSubject = null;    // 目前選中的科目
+let currentChapter = null; // 目前選中的篇章
+
+var gUser=null, gPass=null, gData={}, menuConfig={}, crmData=[];
+var allEvents = [], activeFilters = [], shareDataList = [];
+var cmsUploadFiles = []; 
+var timerInt=null, isTimer=false;
+var curYear = new Date().getFullYear(), curMonth = new Date().getMonth() + 1;
+
+// ... Init ...
+setInterval(function(){
+  var setTime = localStorage.getItem("reminder_time");
+  if(!setTime) return;
+  var now = new Date();
+  var nowStr = (now.getHours()<10?'0':'') + now.getHours() + ":" + (now.getMinutes()<10?'0':'') + now.getMinutes();
+  var lastRemind = localStorage.getItem("last_remind_date");
+  var today = now.toDateString();
+  if (nowStr === setTime && lastRemind !== today) {
+     localStorage.setItem("last_remind_date", today);
+     if(Notification.permission === 'granted') new Notification("賢德志士", { body: "⏰ 時間到了！" });
+  }
+}, 60000); 
+
+window.onload = function(){
+    loading(true);
+    var d = new Date();
+    document.getElementById('adm-date').valueAsDate = d;
+    var mStr = d.getFullYear() + "-" + ((d.getMonth()+1)<10?"0"+(d.getMonth()+1):(d.getMonth()+1));
+    document.getElementById('adm-month').value = mStr;
+
+    callApi('getConfig').then(cfg => {
+        menuConfig = cfg.menu;
+        if(cfg.announcement) document.getElementById('marquee-text').innerText = cfg.announcement;
+        initRegDropdowns();
+        initAdminDropdowns();
+        var u = localStorage.getItem("xd_u"), p = localStorage.getItem("xd_p");
+        if(u&&p){ document.getElementById('l-u').value=u; document.getElementById('l-p').value=p; doLogin(); } else { loading(false); }
+    }).catch(err => {
+        loading(false);
+        console.error(err);
+        alert("連線初始化失敗: " + err);
+    });
+    var savedTime = localStorage.getItem("reminder_time");
+    if(savedTime) document.getElementById('reminder-time').value = savedTime;
+}
+
+// 🔴 核心通訊函式：使用表單參數 'req' 傳送 JSON (最穩定的方式)
+function callApi(action, params) {
+    if(!params) params = {};
+    params.action = action;
+    
+    var formData = new URLSearchParams();
+    formData.append('req', JSON.stringify(params)); 
+    
+    return fetch(API_URL, { 
+        method: 'POST', 
+        body: formData 
+    })
+    .then(res => res.json())
+    .then(json => {
+        if(json.error) {
+           console.error("API Error:", json);
+           if(json.error.includes("Backend")) alert("系統錯誤: " + json.error);
+        }
+        return json;
+    });
+}
+
+function loading(x){ document.getElementById('loading').style.display = x?'flex':'none'; }
+
+function toText(value) {
+  return value === null || value === undefined ? "" : String(value);
+}
+
+function escapeHtml(value) {
+  return toText(value).replace(/[&<>"']/g, function(ch) {
+    return ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#39;"
+    })[ch];
+  });
+}
+
+function escapeAttr(value) {
+  return escapeHtml(value).replace(/`/g, "&#96;");
+}
+
+function encodePayload(value) {
+  return encodeURIComponent(JSON.stringify(value));
+}
+
+function decodePayload(value) {
+  return JSON.parse(decodeURIComponent(value));
+}
+
+// 🔴 螢幕恆亮 API (Wake Lock)
+async function requestWakeLock() {
+  if ('wakeLock' in navigator) {
+    try {
+      wakeLock = await navigator.wakeLock.request('screen');
+      console.log('Wake Lock active');
+      wakeLock.addEventListener('release', () => {
+        console.log('Wake Lock released');
+      });
+    } catch (err) {
+      console.error(`${err.name}, ${err.message}`);
+    }
+  }
+}
+
+function releaseWakeLock() {
+  if(wakeLock !== null) {
+    wakeLock.release().then(() => { wakeLock = null; });
+  }
+}
+
+// 🔴 1. 開啟經典模式 (載入目錄)
+function openClassics() {
+    // 強制隱藏主畫面，顯示經典畫面
+    document.querySelector('.viewport').style.display = 'none';
+    var classicsView = document.getElementById('v-classics');
+    classicsView.style.display = 'flex'; // 🔴 強制設定為 flex，覆蓋可能的 style conflict
+    classicsView.classList.add('active');
+    
+    // 重置狀態
+    currentSubject = null;
+    currentChapter = null;
+    showSubjectList(); // 顯示科目列表
+    
+    // 呼叫後端抓取目錄
+    callApi('getClassicsMenu').then(res => {
+        if(res.success) {
+            classicsMenuData = res.menu;
+            showSubjectList();
+        } else {
+            document.getElementById('classics-menu-list').innerHTML = `<div style="text-align:center; color:red;">${res.error || "載入失敗，請確認 Google Sheet [ClassicsMenu] 是否設定正確"}</div>`;
+        }
+    });
+}
+
+// 🔴 2. 顯示科目列表 (第一層)
+function showSubjectList() {
+    currentSubject = null;
+    document.getElementById('classics-nav-title').innerText = "📚 經典科目";
+    document.getElementById('classics-subtitle').innerText = "請選擇科目";
+    document.getElementById('classics-menu-list').style.display = 'block';
+    document.getElementById('classics-reader').style.display = 'none';
+    document.getElementById('classics-ctrl-bar').style.display = 'none';
+    
+    var html = "";
+    var subjects = Object.keys(classicsMenuData);
+    if (subjects.length === 0) {
+       html = "<div style='text-align:center; color:#ccc; margin-top:20px;'>載入中...</div>";
+    } else {
+       subjects.forEach(subject => {
+           html += `<div class="cms-item" onclick="showChapterList('${subject}')" style="padding:15px; font-size:16px; font-weight:bold; cursor:pointer;">📖 ${subject} <span style="float:right; color:#ccc;">></span></div>`;
+       });
+    }
+    document.getElementById('classics-menu-list').innerHTML = html;
+}
+
+// 🔴 3. 顯示篇章列表 (第二層)
+function showChapterList(subjectName) {
+    currentSubject = subjectName;
+    document.getElementById('classics-nav-title').innerText = subjectName;
+    document.getElementById('classics-subtitle').innerText = "請選擇篇章";
+    
+    var chapters = classicsMenuData[subjectName];
+    var html = "";
+    chapters.forEach(ch => {
+        // ch.title 是篇名, ch.sheet 是對應的 Sheet 名稱
+        html += `<div class="cms-item" onclick="loadChapterContent('${ch.title}', '${ch.sheet}')" style="padding:15px; border-bottom:1px solid #eee; cursor:pointer;">${ch.title}</div>`;
+    });
+    document.getElementById('classics-menu-list').innerHTML = html;
+}
+
+// 🔴 4. 載入並顯示內容 (第三層)
+function loadChapterContent(title, sheetName) {
+    currentChapter = title;
+    document.getElementById('classics-menu-list').style.display = 'none';
+    document.getElementById('classics-reader').style.display = 'block';
+    document.getElementById('classics-ctrl-bar').style.display = 'flex'; // 顯示控制列
+    document.getElementById('classics-nav-title').innerText = title;
+    document.getElementById('classics-subtitle').innerText = "閱讀計時中... 螢幕恆亮";
+    
+    document.getElementById('classics-reader').innerHTML = '<div style="text-align:center; margin-top:50px;"><div class="spinner"></div><br>載入經文中...</div>';
+    
+    // 開始計時 & 恆亮
+    classicsStartTime = Date.now();
+    requestWakeLock();
+
+    callApi('getClassicContent', {targetSheet: sheetName}).then(res => {
+         if(res.success) {
+             // 更新全域變數，讓朗讀功能讀到正確的內容
+             CLASSICS_CONTENT = res.content; 
+             var reader = document.getElementById('classics-reader');
+             reader.innerHTML = res.content;
+             
+             // 🔴 啟動智慧書籤偵測
+             setupReaderObserver();
+             // 🔴 恢復閱讀進度
+             restoreReadingProgress(title);
+         } else {
+             document.getElementById('classics-reader').innerHTML = `<div style="color:red; text-align:center;">無法讀取內容：${res.error}</div>`;
+         }
+    });
+}
+
+// 🔴 新增：設定段落偵測器 (Intersection Observer)
+function setupReaderObserver() {
+    if (readingObserver) readingObserver.disconnect();
+    
+    var paragraphs = document.querySelectorAll('#classics-reader p');
+    totalParagraphs = paragraphs.length;
+    currentParagraphIndex = 0; // 重置
+    
+    var options = {
+        root: document.getElementById('classics-reader'),
+        threshold: 0.5 // 50% 可見時觸發
+    };
+    
+    readingObserver = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                // 找出這個 p 是第幾個
+                var allP = Array.from(document.querySelectorAll('#classics-reader p'));
+                var index = allP.indexOf(entry.target);
+                if (index !== -1) {
+                    currentParagraphIndex = index;
+                    // 移除舊的高亮，加上新的
+                    allP.forEach(p => p.classList.remove('reading-active'));
+                    entry.target.classList.add('reading-active');
+                }
+            }
+        });
+    }, options);
+    
+    paragraphs.forEach(p => readingObserver.observe(p));
+}
+
+// 🔴 新增：恢復閱讀進度
+function restoreReadingProgress(chapterTitle) {
+    if (!gData.reading_bookmark) gData.reading_bookmark = {};
+    
+    // 取得上次進度 (段落 index)
+    var lastIndex = gData.reading_bookmark[chapterTitle];
+    
+    if (lastIndex && lastIndex > 0) {
+        var paragraphs = document.querySelectorAll('#classics-reader p');
+        if (paragraphs[lastIndex]) {
+            // 自動捲動到該段落
+            setTimeout(() => {
+                paragraphs[lastIndex].scrollIntoView({ behavior: 'smooth', block: 'center' });
+                paragraphs[lastIndex].classList.add('reading-active');
+            }, 500); // 稍微延遲確保渲染完成
+        }
+    }
+}
+
+// 🔴 5. 返回按鈕邏輯 (整合智慧書籤存檔)
+function backToMenu() {
+    if (document.getElementById('classics-reader').style.display === 'block') {
+        // 如果在閱讀內文，先結算時間 + 存檔進度
+        closeClassics(true); // true 代表只是返回上一層，不完全關閉
+        showChapterList(currentSubject); // 返回篇章列表
+    } else if (currentSubject) {
+        // 如果在篇章列表，返回科目單
+        showSubjectList();
+    } else {
+        // 如果在科目單，就關閉
+        closeClassics(false);
+    }
+}
+
+// 🔴 6. 結算時間 & 書籤 (獨立出來方便呼叫)
+function calculateReadTimeAndBookmark() {
+    if(!classicsStartTime) return;
+    
+    var durationSec = Math.floor((Date.now() - classicsStartTime) / 1000);
+    classicsStartTime = 0; // 重置
+    
+    // --- 處理書籤邏輯 ---
+    if (!gData.reading_bookmark) gData.reading_bookmark = {};
+    
+    // 判斷是否讀完 (如果是最後一段)
+    if (currentParagraphIndex >= totalParagraphs - 1) {
+        // 已讀完，歸零
+        gData.reading_bookmark[currentChapter] = 0;
+        // 可以選擇是否要跳出恭喜訊息
+    } else {
+        // 未讀完，記錄當前段落
+        gData.reading_bookmark[currentChapter] = currentParagraphIndex;
+    }
+
+    // --- 處理時間邏輯 ---
+    if(durationSec > 5) { // 讀超過5秒才紀錄
+       gData.task_read_time = (gData.task_read_time || 0) + durationSec;
+       var min = Math.floor(durationSec / 60);
+       
+       // 背景同步
+       callApi('saveGameData', {
+          u:gUser, p:gPass, data:gData, 
+          log: { action: "讀經", detail: `${currentChapter || '經典'} (${min}分${durationSec%60}秒)` }
+       }).then(() => {
+          renderUI(); // 更新首頁時間顯示
+          // 可選：提示書籤已儲存
+          // alert("進度已儲存"); 
+       });
+    }
+}
+
+// 修改原本的 closeClassics
+function closeClassics(isBack) {
+    if (document.getElementById('classics-reader').style.display === 'block') {
+         calculateReadTimeAndBookmark();
+         if(readingObserver) readingObserver.disconnect();
+    }
+    
+    if(window.speechSynthesis) window.speechSynthesis.cancel();
+    releaseWakeLock();
+    
+    if (!isBack) {
+        document.getElementById('v-classics').classList.remove('active');
+        document.getElementById('v-classics').style.display = 'none'; // 🔴 明確隱藏
+        document.querySelector('.viewport').style.display = 'flex'; // 🔴 明確顯示主畫面
+    }
+}
+
+function toggleTTS() {
+    if (!window.speechSynthesis) { alert("您的裝置不支援語音朗讀"); return; }
+    if (window.speechSynthesis.speaking) {
+        if (window.speechSynthesis.paused) {
+            window.speechSynthesis.resume();
+            document.getElementById('btn-tts').innerText = "⏸️ 暫停朗讀";
+        } else {
+            window.speechSynthesis.pause();
+            document.getElementById('btn-tts').innerText = "▶️ 繼續朗讀";
+        }
+    } else {
+        // 開始新的朗讀
+        // 從畫面取得文字 (避免有 HTML 標籤)
+        var text = document.getElementById('classics-reader').innerText;
+        ttsUtterance = new SpeechSynthesisUtterance(text);
+        ttsUtterance.lang = "zh-TW"; 
+        ttsUtterance.rate = 1; 
+        window.speechSynthesis.speak(ttsUtterance);
+        document.getElementById('btn-tts').innerText = "⏸️ 暫停朗讀";
+        
+        ttsUtterance.onend = function() {
+            document.getElementById('btn-tts').innerText = "🔊 語音伴讀";
+        };
+    }
+}
+
+// 🔴 7. 批次爬蟲 (由 APP 觸發)
+function runBatchCrawler() {
+   if(!confirm("確定要執行爬蟲嗎？\n請確保您已在 Google Sheet 的 [ClassicsMenu] 中填入網址。")) return;
+   
+   loading(true);
+   callApi('batchCrawl').then(res => {
+      loading(false);
+      alert(res.msg);
+   });
+}
+
+// ... Share Logic ...
+function loadShareData() {
+   var isAdmin = (gData.teamMajor === "主領班");
+   callApi('getShareData', {isAdmin: isAdmin}).then(res => {
+      document.getElementById('share-loading').style.display = 'none';
+      shareDataList = res.list || [];
+      if(isAdmin) renderCmsList();
+      var activeList = shareDataList.filter(item => item.isActive);
+      if(activeList.length === 0) {
+         document.getElementById('share-loading').innerText = "📭 目前沒有推廣內容";
+         document.getElementById('share-loading').style.display = 'block';
+         document.getElementById('share-container').innerHTML = "";
+         return;
+      }
+      document.getElementById('share-container').style.display = 'flex';
+      var html = "";
+      activeList.forEach((item, index) => {
+         var originalIndex = shareDataList.indexOf(item);
+         var firstImg = (item.images && item.images.length>0) ? item.images[0] : "";
+         var imgHtml = firstImg ? `<img src="${escapeAttr(firstImg)}" class="share-img" alt="">` : `<div style="text-align:center; color:#ccc; padding:20px; background:#f5f5f5; border-radius:8px; margin-bottom:10px;">無圖片</div>`;
+         html += `<div class="share-card">${imgHtml}<div class="share-title">${escapeHtml(item.title)}</div><div class="share-text">${escapeHtml(item.text)}</div><div style="display:flex; gap:5px;"><button class="btn" style="flex:1; background:#fff; color:#555; border:1px solid #ddd; font-size:11px;" onclick="copyShareText(${originalIndex})">📋 複製文字</button><button class="btn" style="flex:1; background:#00c300; color:#fff; font-size:11px;" onclick="nativeShare(${originalIndex})">💬 分享</button></div></div>`;
+      });
+      document.getElementById('share-container').innerHTML = html;
+   });
+}
+
+function copyShareText(index) {
+   var text = shareDataList[index].text;
+   navigator.clipboard.writeText(text).then(() => alert("文字已複製！"));
+}
+
+async function nativeShare(index) {
+   var item = shareDataList[index];
+   try { await navigator.clipboard.writeText(item.text); } catch(e){}
+   var filesArray = [];
+   if(item.images && item.images.length > 0) {
+      loading(true);
+      try {
+         for(var i=0; i<item.images.length; i++) {
+            var url = item.images[i];
+            var blob = await fetch(url).then(r => r.blob());
+            var file = new File([blob], `share_${i}.jpg`, { type: blob.type });
+            filesArray.push(file);
+         }
+      } catch(e) { alert("圖片下載失敗"); }
+      loading(false);
+   }
+   if (navigator.canShare && navigator.canShare({ files: filesArray })) {
+      navigator.share({ text: item.text, files: filesArray }).catch(() => {});
+   } else {
+      alert("不支援原生分享，文字已複製。");
+      window.location.href = "https://line.me/R/msg/text/?" + encodeURIComponent(item.text);
+   }
+}
+
+// ... CMS Logic ...
+function switchAdminView(view) {
+   ['promo', 'broadcast', 'report'].forEach(v => document.getElementById('adm-view-'+v).style.display = 'none');
+   document.getElementById('adm-view-'+view).style.display = 'block';
+}
+function renderCmsList() {
+   var html = "";
+   shareDataList.forEach((item, idx) => {
+      var statusIcon = item.isActive ? "👁️" : "🔒";
+      var statusClass = item.isActive ? "" : "inactive";
+      html += `<div class="cms-item ${statusClass}"><div class="cms-info"><div class="cms-title">${statusIcon} ${escapeHtml(item.title)}</div><div class="cms-desc">${escapeHtml(item.text)}</div></div><div class="cms-actions"><button onclick="manageShare('toggle', {index:${idx}})">${item.isActive?'隱藏':'啟用'}</button><button onclick="manageShare('move', {index:${idx}, direction:-1})">⬆️</button><button onclick="manageShare('move', {index:${idx}, direction:1})">⬇️</button><button onclick="openCmsModal('edit', ${idx})">✏️</button><button onclick="manageShare('delete', {index:${idx}})" style="color:red;">🗑️</button></div></div>`;
+   });
+   document.getElementById('cms-list').innerHTML = html || "無內容";
+}
+function openCmsModal(mode, idx) {
+   var isAdd = mode === 'add';
+   var item = isAdd ? {title:"", text:""} : shareDataList[idx];
+   cmsUploadFiles = []; 
+   var html = `<input id="cms-title" class="input-field" placeholder="標題" value="${escapeAttr(item.title)}"><textarea id="cms-text" class="input-field" rows="4" placeholder="宣傳文案">${escapeHtml(item.text)}</textarea>${isAdd ? `<div style="margin-top:10px;"><label class="btn" style="background:#eee; color:#555; display:inline-block; width:auto; padding:5px 10px; font-size:12px;">📷 選擇圖片 (可多張) <input type="file" multiple accept="image/*" style="display:none;" onchange="handleCmsFiles(this)"></label><div id="cms-preview" class="preview-grid"></div></div>` : ''}<button class="btn btn-primary" onclick="submitCms('${mode}', ${idx})">${isAdd?'🚀 發布':'💾 更新'}</button>`;
+   document.getElementById('modal-title').innerText = isAdd ? "新增宣傳" : "編輯內容";
+   document.getElementById('modal-content').innerHTML = html;
+   document.getElementById('modal-overlay').style.display = 'flex';
+}
+function handleCmsFiles(input) {
+   cmsUploadFiles = [];
+   document.getElementById('cms-preview').innerHTML = "";
+   if(input.files) {
+      for(var i=0; i<input.files.length; i++) {
+         var file = input.files[i];
+         var reader = new FileReader();
+         reader.onload = function(e) {
+            cmsUploadFiles.push({ base64: e.target.result.split(',')[1], name: file.name });
+            document.getElementById('cms-preview').innerHTML += `<img src="${escapeAttr(e.target.result)}" class="preview-img" alt="">`;
+         };
+         reader.readAsDataURL(file);
+      }
+   }
+}
+function submitCms(mode, idx) {
+   var title = document.getElementById('cms-title').value;
+   var text = document.getElementById('cms-text').value;
+   if(!title || !text) { alert("請填寫完整"); return; }
+   var payload = { title: title, text: text, index: idx };
+   if(mode === 'add') { payload.images = cmsUploadFiles; }
+   loading(true);
+   callApi('manageShare', {subAction: mode, data: payload}).then(res => {
+      loading(false);
+      if(res.success) { alert(res.msg); closeModal(); loadShareData(); } else { alert("失敗: " + res.msg); }
+   });
+}
+function manageShare(action, data) {
+   if(action === 'delete' && !confirm("確定刪除？")) return;
+   loading(true);
+   callApi('manageShare', {subAction: action, data: data}).then(res => {
+      loading(false);
+      if(res.success) loadShareData();
+   });
+}
+
+// ... Other Features ...
+function loadEvents() {
+   document.getElementById('event-list').innerHTML = '<div style="text-align:center; padding:20px; color:#ccc;">載入中...</div>';
+   callApi('getYearlyEvents').then(res => {
+      if(res.error) { document.getElementById('event-list').innerHTML = `<div style="text-align:center; color:#f44336;">${res.error}</div>`; return; }
+      allEvents = res.list || [];
+      var cats = res.cats || [];
+      initFilters();
+      var filterHtml = `<div class="chip ${activeFilters.length===0?'active':''}" onclick="toggleFilter('all', this)">全部</div>`;
+      cats.forEach(c => { var isActive = activeFilters.includes(c) ? 'active' : ''; filterHtml += `<div class="chip ${isActive}" onclick="toggleFilter('${c}', this)">${c}</div>`; });
+      document.getElementById('event-filters').innerHTML = filterHtml;
+      renderEventList();
+   });
+}
+function initFilters() { if(gData.teamMajor === "主領班") { activeFilters = []; } else { activeFilters = ["中央", "賢德", "仙佛紀念日"]; if(gData.teamMajor && gData.teamMajor.includes("賢")) { activeFilters.push(gData.teamMajor); } } }
+function toggleFilter(cat, el) { if(cat === 'all') { activeFilters = []; var chips = document.querySelectorAll('.chip'); chips.forEach(c => c.classList.remove('active')); el.classList.add('active'); } else { document.querySelector('.chip:first-child').classList.remove('active'); if(activeFilters.includes(cat)) { activeFilters = activeFilters.filter(c => c !== cat); el.classList.remove('active'); } else { activeFilters.push(cat); el.classList.add('active'); } } renderEventList(); }
+function renderEventList() { var today = new Date(); today.setHours(0,0,0,0); var html = ""; var hasScrolled = false; var historyAdded = false; var weekDays = ["日", "一", "二", "三", "四", "五", "六"]; allEvents.forEach((e, index) => { if(activeFilters.length > 0 && !activeFilters.includes(e.cat)) return; var dStart = new Date(e.date); var dEnd = new Date(e.end); var isPast = dEnd < today; var isTodayOrFuture = dEnd >= today; if(!historyAdded && isTodayOrFuture && index > 0) { html += `<div class="history-line">以上是歷史活動</div>`; historyAdded = true; } var day = dStart.getDate(); var mon = dStart.getMonth() + 1; var weekStr = weekDays[dStart.getDay()]; var dateRangeStr = ""; if(e.date !== e.end) { var dEndDay = dEnd.getDate(); var dEndMon = dEnd.getMonth() + 1; dateRangeStr = `📅 ${mon}/${day} ~ ${dEndMon}/${dEndDay}`; day = `${day}-${dEndDay}`; var diffTime = dStart - today; var diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); if(diffDays > 0) dateRangeStr += ` (還有${diffDays}天)`; else if(diffDays <= 0 && dEnd >= today) dateRangeStr += ` (進行中)`; } else { var diffTime = dStart - today; var diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); if(diffDays === 0) dateRangeStr = "<span style='color:red; font-weight:bold;'>今天!</span>"; else if(diffDays > 0) dateRangeStr = `還有 ${diffDays} 天`; else dateRangeStr = "已結束"; } var cardId = ""; if(!hasScrolled && isTodayOrFuture) { cardId = "id='today-focus'"; hasScrolled = true; } var noteHtml = e.note ? `<div class="event-note">${escapeHtml(e.note)}</div>` : ""; html += `<div ${cardId} class="event-card ${isPast?'past':''} ${cardId?'focus':''}"><div class="event-date-box" style="border-left: 5px solid ${getTagColor(e.cat)}"><div class="event-month">${mon}月</div><div class="event-day" style="font-size:${day.toString().length>2?'14px':'18px'}">${day}</div><div style="font-size:10px; margin-top:-2px;">週${weekStr}</div></div><div class="event-info"><div class="event-title">${escapeHtml(e.name)}</div>${noteHtml}<div class="event-meta"><span class="tag" style="background:${getTagColor(e.cat)}">${escapeHtml(e.cat)}</span><span>📍 ${escapeHtml(e.loc || "--")}</span><span style="flex:1; text-align:right; font-size:10px; color:#999;">${dateRangeStr}</span></div></div></div>`; }); document.getElementById('event-list').innerHTML = html || "<div style='text-align:center; color:#999; padding:20px;'>沒有活動</div>"; setTimeout(() => { var focusEl = document.getElementById('today-focus'); if(focusEl) focusEl.scrollIntoView({behavior: "smooth", block: "center"}); }, 300); }
+function getTagColor(cat) { if(!cat) return "#ccc"; if(cat.includes("仙佛")) return "#fbc02d"; if(cat.includes("賢德")) return "#8bc34a"; if(cat.includes("中央")) return "#ff7043"; if(cat.includes("中") || cat.includes("北") || cat.includes("南")) return "#29b6f6"; return "#9e9e9e"; }
+
+function loadCRM(targetUser) { var u = targetUser || gUser; if(!targetUser) document.getElementById('crm-list').innerHTML = '<div style="text-align:center; color:#999;">載入中...</div>'; callApi('getCRM', {u:gUser, target:u}).then(res => { if(res.error) { alert(res.error); return; } var list = res.list || []; if(targetUser) { var html = `<h4>👤 ${escapeHtml(targetUser)} 的記事本</h4>`; if(list.length === 0) html += "<p>尚無資料</p>"; list.forEach(item => { var stClass = "s-plan"; if(item.status.includes("開口")) stClass = "s-spoke"; if(item.status.includes("入班") || item.status.includes("求道")) stClass = "s-join"; var rInfo = item.remind ? `<br><small>⏰ ${item.remind} (${item.repeat})</small>` : ""; html += `<div class="crm-card" style="pointer-events:none; background:#f9f9f9;"><div class="crm-header"><div class="crm-name">${escapeHtml(item.name)}</div><div class="crm-status ${stClass}">${escapeHtml(item.status)}</div></div><div class="crm-note">${item.todo ? "📝 待辦: " + item.todo : (item.note || "無備註")}${rInfo}</div></div>`; }); document.getElementById('modal-content').innerHTML = html; } else { crmData = list; renderCRM(); } }); }
+function renderCRM() { var todoHtml = "", listHtml = ""; crmData.forEach(item => { if(item.todo) { todoHtml += `<div class="todo-item"><input type="checkbox" class="todo-check" onclick="completeTodo(${item.id})"><div class="todo-text"><div style="font-weight:bold;">${escapeHtml(item.name)}</div><div>${escapeHtml(item.todo)}</div></div></div>`; } var stClass = "s-plan"; if(item.status.includes("開口")) stClass = "s-spoke"; if(item.status.includes("入班") || item.status.includes("求道")) stClass = "s-join"; var rIcon = item.remind ? "⏰" : ""; listHtml += `<div class="crm-card" onclick="editCRMFromPayload('${encodePayload(item)}')"><div class="crm-header"><div class="crm-name">${escapeHtml(item.name)} ${rIcon}</div><div class="crm-status ${stClass}">${escapeHtml(item.status)}</div></div><div class="crm-note">${item.todo ? "📝 " + item.todo : (item.note || "無備註")}</div></div>`; }); document.getElementById('crm-todo-list').innerHTML = todoHtml || '<div style="text-align:center; color:#999; font-size:12px;">無待辦事項</div>'; document.getElementById('crm-list').innerHTML = listHtml || '<div style="text-align:center; color:#999; margin-top:20px;">點擊右下角 + 新增名單</div>'; }
+function editCRMFromPayload(payload) { editCRM(decodePayload(payload)); }
+function editCRM(item) { var title = item ? "編輯資料" : "新增名單"; var isNew = !item; item = item || { id:0, name:"", status:"預計渡眾", todo:"", note:"", remind:"", repeat:"none" }; var html = `<input id="e-id" type="hidden" value="${escapeAttr(item.id)}"><div style="margin-bottom:10px;"><label>姓名</label><input id="e-name" class="input-field" value="${escapeAttr(item.name)}" placeholder="對象姓名"></div><div style="margin-bottom:10px;"><label>狀態</label><select id="e-status" class="input-field"><option ${item.status=='預計渡眾'?'selected':''}>預計渡眾</option><option ${item.status=='已開口'?'selected':''}>已開口</option><option ${item.status=='跟進中'?'selected':''}>跟進中</option><option ${item.status=='已求道'?'selected':''}>已求道</option><option ${item.status=='已入班'?'selected':''}>已入班</option></select></div><div style="margin-bottom:10px;"><label>下一步 / 待辦</label><input id="e-todo" class="input-field" value="${escapeAttr(item.todo)}" placeholder="例如：約吃飯、送書"></div><div style="margin-bottom:10px; background:#f0f4c3; padding:10px; border-radius:10px;"><label>⏰ 設定提醒 (選填)</label><input id="e-remind" type="datetime-local" class="input-field" value="${escapeAttr(item.remind)}"><label>重複頻率</label><select id="e-repeat" class="input-field"><option value="none" ${item.repeat=='none'?'selected':''}>單次提醒</option><option value="daily" ${item.repeat=='daily'?'selected':''}>每天</option><option value="weekly" ${item.repeat=='weekly'?'selected':''}>每週</option><option value="monthly" ${item.repeat=='monthly'?'selected':''}>每月</option></select></div><div style="margin-bottom:15px;"><label>備註</label><textarea id="e-note" class="input-field" rows="3">${escapeHtml(item.note)}</textarea></div><button class="btn btn-primary" onclick="saveCRMItem()">💾 儲存</button>${!isNew ? `<button class="btn" style="background:#eee; color:#f44336; margin-top:10px;" onclick="deleteCRMItem(${item.id})">🗑️ 刪除</button>` : ''}`; document.getElementById('modal-title').innerText = title; document.getElementById('modal-content').innerHTML = html; document.getElementById('modal-overlay').style.display = 'flex'; }
+function saveCRMItem() { var item = { id: document.getElementById('e-id').value, name: document.getElementById('e-name').value, status: document.getElementById('e-status').value, todo: document.getElementById('e-todo').value, note: document.getElementById('e-note').value, remind: document.getElementById('e-remind').value, repeat: document.getElementById('e-repeat').value }; if(!item.name) { alert("請輸入姓名"); return; } loading(true); callApi('saveCRM', {u:gUser, item:item}).then(res => { loading(false); closeModal(); loadCRM(); }); }
+function deleteCRMItem(id) { if(!confirm("確定要刪除此筆資料嗎？")) return; loading(true); callApi('deleteCRM', {u:gUser, idx:id}).then(res => { loading(false); closeModal(); loadCRM(); }); }
+function completeTodo(id) { if(!confirm("完成此待辦事項？")) return; var item = crmData.find(x => x.id == id); if(item) { item.todo = ""; loading(true); callApi('saveCRM', {u:gUser, item:item}).then(res => { loading(false); loadCRM(); }); } }
+function openAdminCRMFromPayload(payload) { openAdminCRM(decodePayload(payload)); }
+function openAdminCRM(userName) { document.getElementById('modal-overlay').style.display = 'flex'; document.getElementById('modal-title').innerText = "載入中..."; document.getElementById('modal-content').innerHTML = "請稍候..."; loadCRM(userName); }
+
+function initRegDropdowns(){ 
+    var s=document.getElementById('r-maj'), opts="<option disabled selected>選擇團隊</option>"; 
+    for(var k in menuConfig){ opts += `<option value="${k}">${k}</option>`; } 
+    s.innerHTML = opts; 
+}
+
+function initAdminDropdowns(){ 
+    var s=document.getElementById('adm-maj'), opts="<option value='全部'>全部團隊</option>"; 
+    for(var k in menuConfig){ opts += `<option value="${k}">${k}</option>`; } 
+    s.innerHTML = opts; 
+    admUpdMin(); 
+}
+
+// 🔴 核心修復：把 admUpdMin 展開，避免被吃掉
+function admUpdMin(){ 
+    var m=document.getElementById('adm-maj').value, s=document.getElementById('adm-min'); 
+    s.innerHTML="<option value='全部'>全部公堂</option>"; 
+    if(m !== '全部' && menuConfig[m]) { 
+        menuConfig[m].forEach(x => { 
+            var o=document.createElement('option'); o.value=x; o.innerText=x; s.appendChild(o); 
+        }); 
+    } 
+}
+
+function loadAdminFilters() { 
+    if(Object.keys(menuConfig).length > 0) { 
+        initAdminDropdowns(); 
+    } else { 
+        callApi('getConfig').then(cfg => { 
+            menuConfig = cfg.menu; 
+            initAdminDropdowns(); 
+        }); 
+    } 
+}
+
+function updMinor(){ var m=document.getElementById('r-maj').value, s=document.getElementById('r-min'); s.innerHTML=""; if(menuConfig[m]) menuConfig[m].forEach(x => { var o=document.createElement('option'); o.value=x; o.innerText=x; s.appendChild(o); }); }
+function toggleAuth(t){ document.getElementById('f-login').style.display=t=='login'?'block':'none'; document.getElementById('f-reg').style.display=t=='register'?'block':'none'; }
+function nav(t){ ['home','orchard','profile','admin','crm','events'].forEach(x=>{ document.getElementById('v-'+x).classList.remove('active'); document.getElementById('n-'+x).classList.remove('active'); }); document.getElementById('v-'+t).classList.add('active'); document.getElementById('n-'+t).classList.add('active'); }
+function closeModal() { document.getElementById('modal-overlay').style.display = 'none'; }
+function toggleAdmDateInput() { var mode = document.getElementById('adm-mode').value; document.getElementById('adm-date-box').style.display = mode==='date' ? 'block' : 'none'; document.getElementById('adm-month-box').style.display = mode==='month' ? 'block' : 'none'; }
+function doReg(){ var u=document.getElementById('r-u').value, p=document.getElementById('r-p').value, maj=document.getElementById('r-maj').value, min=document.getElementById('r-min').value; if(!u||!p||!maj||!min){ alert("請填寫完整"); return; } loading(true); callApi('register', {u:u, p:p, maj:maj, min:min}).then(r => { loading(false); alert(r.msg); if(r.success) toggleAuth('login'); }); }
+function doLogin(){ 
+   var u=document.getElementById('l-u').value, p=document.getElementById('l-p').value; 
+   loading(true); 
+   callApi('login', {u:u, p:p}).then(r => { 
+      loading(false); 
+      if(r.success){ 
+         gUser=u; gPass=p; gData=r.gameData; 
+         localStorage.setItem("xd_u",u); localStorage.setItem("xd_p",p); 
+         if(window.OneSignal) OneSignal.User.addTag("user", u);
+         loadShareData();
+         lastLogTime = new Date().getTime(); 
+         if(gData.teamMajor === "主領班") { document.getElementById('n-admin').style.display = 'block'; } 
+         enterGame(); 
+      } else { alert(r.msg); } 
+   }); 
+}
+function enterGame(){ document.getElementById('auth-screen').style.display='none'; document.getElementById('game-screen').style.display='flex'; renderUI(); }
+function logout(){ if(confirm("登出?")){ localStorage.removeItem("xd_p"); location.reload(); } }
+function renderUI(){ document.getElementById('ui-team').innerText = gData.teamFull; document.getElementById('p-job').innerText = gData.job; updateDashboard(); var ck = document.getElementById('ck-sport'); if(gData.task_sport_done){ ck.style.background='var(--primary)'; ck.style.borderColor='var(--primary)'; } else { ck.style.background='transparent'; ck.style.borderColor='#ddd'; } updTimer(gData.task_read_time||0); }
+function addCount(id) { var el = document.getElementById(id); el.value = parseInt(el.value || 0) + 1; updateDashboard(); }
+function minusCount(id) { var el = document.getElementById(id); var val = parseInt(el.value || 0); if (val > 0) { el.value = val - 1; updateDashboard(); } }
+function updateDashboard() { var addS = parseInt(document.getElementById('inp-spoke').value||0); var addC = parseInt(document.getElementById('inp-conv').value||0); var addCl = parseInt(document.getElementById('inp-class').value||0); var totalS = (gData.spoke_count||0) + addS; var totalC = (gData.convert_count||0) + addC; var totalCl = (gData.class_count||0) + addCl; document.getElementById('today-dash').innerText = `📊 今日已累積：開口 ${totalS} | 渡眾 ${totalC} | 入班 ${totalCl}`; }
+function toggleTimer(){ 
+   var b = document.getElementById('btn-timer'); 
+   if(isTimer){ 
+      clearInterval(timerInt); isTimer=false; b.innerText="繼續計時"; b.className="btn btn-primary"; 
+      // 🔴 停止時釋放
+      releaseWakeLock(); 
+      saveData({action:"讀書", detail:"累計 "+Math.floor(gData.task_read_time/60)+" 分鐘"}); 
+   } else { 
+      timerInt = setInterval(function(){ gData.task_read_time=(gData.task_read_time||0)+1; updTimer(gData.task_read_time); }, 1000); 
+      isTimer=true; b.innerText="暫停計時"; b.className="btn btn-warn"; 
+      // 🔴 開始時鎖定
+      requestWakeLock(); 
+   } 
+}
+function updTimer(s){ var m=Math.floor(s/60), sec=s%60; document.getElementById('timer-display').innerText = (m<10?"0"+m:m)+":"+(sec<10?"0"+sec:sec); }
+function toggleSport(){ if(gData.task_sport_done) return; gData.task_sport_done = true; renderUI(); saveData({action:"運動", detail:"完成今日30分鐘運動！"}); }
+function saveAchievements(){ var addS = parseInt(document.getElementById('inp-spoke').value||0); var addC = parseInt(document.getElementById('inp-conv').value||0); var addCl = parseInt(document.getElementById('inp-class').value||0); if(addS==0 && addC==0 && addCl==0) { alert("請輸入數量"); return; } gData.spoke_count = (gData.spoke_count||0) + addS; gData.convert_count = (gData.convert_count||0) + addC; gData.class_count = (gData.class_count||0) + addCl; loading(true); var msg = `開口${addS}, 渡眾${addC}, 入班${addCl}`; callApi('saveGameData', {u:gUser, p:gPass, data:gData, log:{action:"回報成果", detail: msg}}).then(r => { loading(false); document.getElementById('inp-spoke').value=0; document.getElementById('inp-conv').value=0; document.getElementById('inp-class').value=0; renderUI(); alert("📜 紀錄已同步！"); }); }
+function saveData(logObj){ callApi('saveGameData', {u:gUser, p:gPass, data:gData, log:logObj}); }
+function setLocalReminder() { var t = document.getElementById('reminder-time').value; localStorage.setItem("reminder_time", t); if('Notification' in window) Notification.requestPermission(); alert("提醒時間已設定為 " + t); }
+
+// 🔴 缺少的函式補完了
+function changeMonth(delta) { 
+    curMonth += delta; 
+    if(curMonth > 12) { curMonth = 1; curYear++; } 
+    if(curMonth < 1) { curMonth = 12; curYear--; } 
+    loadCalendar(); 
+}
+
+function loadCalendar() { 
+    var mStr = curYear + "-" + (curMonth<10?"0"+curMonth:curMonth); 
+    document.getElementById('cal-title').innerText = mStr; 
+    document.getElementById('calendar-area').innerHTML = "Loading..."; 
+    document.getElementById('profile-stats').innerHTML = ""; 
+    document.getElementById('profile-log-list').innerHTML = ""; 
+    
+    callApi('getCalendarData', {u:gUser, year:curYear, month:curMonth}).then(res => { 
+        var daysInMonth = new Date(curYear, curMonth, 0).getDate(); 
+        var html = ""; 
+        for(var d=1; d<=daysInMonth; d++) { 
+            var dStr = mStr + "-" + (d<10?"0"+d:d); 
+            var dayData = res.cal[dStr]; 
+            var cls = "cal-day"; 
+            if(dayData) { 
+                var count = 0; 
+                if(dayData.read) count++; 
+                if(dayData.sport) count++; 
+                if(dayData.achieve) count++; 
+                if(count > 0) cls += " cal-fill-" + count; 
+            } 
+            html += `<div class="${cls}">${d}</div>`; 
+        } 
+        document.getElementById('calendar-area').innerHTML = html; 
+        var s = res.stats; 
+        document.getElementById('profile-stats').innerHTML = `<b>📊 ${mStr} 月報表</b><br>運動: ${s.sportDays}天 | 讀書: ${s.readDays}天 | 開口: ${s.totalSpoke}`; 
+        var logHtml = res.logs.map(l => `<div class="log-item"><div class="log-time" style="width:80px;">${l.time}</div><div class="log-content"><b>${escapeHtml(l.action)}</b> ${escapeHtml(l.detail)}</div></div>`).join(''); 
+        document.getElementById('profile-log-list').innerHTML = logHtml || "無紀錄"; 
+    }); 
+}
+
+// 🔴 這裡我幫您加上了「儀表板數字加總邏輯」，請放心複製
+function loadOrchard(){ 
+  document.getElementById('orchard-container').innerHTML = 'Loading...'; 
+  callApi('getOrchardData').then(data => { 
+    var html = ""; 
+    // 🔴 新增：變數初始化
+    var totalS = 0, totalC = 0, totalCl = 0; 
+
+    for(var key in data){ 
+      var h = data[key]; 
+      // 🔴 新增：累加運算
+      var s = Number(h.spoke)||0; 
+      var c = Number(h.convert)||0; 
+      var cl = Number(h.joinClass)||0;
+      totalS += s; totalC += c; totalCl += cl;
+
+      var fruits = ""; 
+      var redFruits = Math.floor(s / 10); 
+      var totalPoints = redFruits + c + cl; 
+      var treeClass = "tree-scale-s"; 
+      if(totalPoints > 20) treeClass = "tree-scale-l"; else if(totalPoints > 5) treeClass = "tree-scale-m"; 
+      for(var i=0; i<redFruits && i<10; i++) fruits += '<div class="fruit red"></div>'; 
+      for(var i=0; i<c && i<10; i++) fruits += '<div class="fruit gold"></div>'; 
+      for(var i=0; i<cl && i<10; i++) fruits += '<div class="fruit blue"></div>'; 
+      if(totalPoints == 0) fruits = '<span style="font-size:10px; color:#fff;">種子</span>'; 
+      var info = `開口:${s} 渡眾:${c} 入班:${cl}`; 
+      html += `<div class="tree-container ${treeClass}" onclick="openHallModal('${h.name}', '${info}')"><div class="tree-canopy">${fruits}</div><div class="tree-trunk"></div><div class="tree-label">${h.name}<br><span style="font-size:10px;">${h.members}人</span></div></div>`; 
+    } 
+    
+    document.getElementById('orchard-container').innerHTML = html || "無資料"; 
+    
+    // 🔴 新增：更新儀表板數字
+    if(document.getElementById('dash-spoke')) { 
+       document.getElementById('dash-spoke').innerText = totalS; 
+       document.getElementById('dash-conv').innerText = totalC; 
+       document.getElementById('dash-class').innerText = totalCl; 
+    } 
+    
+    loadGlobalLogs(); 
+  }); 
+}
+
+function openHallModal(name, info) { document.getElementById('modal-overlay').style.display = 'flex'; document.getElementById('modal-title').innerText = name; document.getElementById('modal-content').innerHTML = `<div style="background:#f1f8e9; padding:10px; border-radius:10px; margin-bottom:10px;"><b>📊 公堂總成績</b><br>${info}</div><div id="hall-members">成員載入中...</div>`; callApi('getHallDetails', {hall:name}).then(res => { var h = res.list.map(m => `<div class="member-row"><span>${escapeHtml(m.name)}</span><span>開${m.s}/渡${m.c}/班${m.cl}</span></div>`).join(''); document.getElementById('hall-members').innerHTML = h; }); }
+function updateMarquee() { var msg = document.getElementById('adm-marquee').value; if(!msg) return; callApi('updateMarquee', {msg:msg}).then(r => { alert(r.msg); document.getElementById('marquee-text').innerText = msg; }); }
+function runAdminQuery() { try { if(Object.keys(menuConfig).length === 0) { alert("系統資料載入中，請稍後再試..."); return; } var filters = { major: document.getElementById('adm-maj').value, minor: document.getElementById('adm-min').value, hasSport: document.getElementById('f-sport').checked, hasRead: document.getElementById('f-read').checked, hasSpoke: document.getElementById('f-spoke').checked, hasConv: document.getElementById('f-conv').checked, hasClass: document.getElementById('f-class').checked }; var mode = document.getElementById('adm-mode').value; var dateVal = ""; if(mode === 'date') dateVal = document.getElementById('adm-date').value; if(mode === 'month') dateVal = document.getElementById('adm-month').value; loading(true); callApi('getAdminReport', {filters:filters, mode:mode, dateVal:dateVal}).then(res => { loading(false); if(res.error) { alert("系統錯誤: " + res.error); return; } if(!res.list || res.list.length === 0) { document.getElementById('admin-report').style.display = 'block'; document.getElementById('admin-report').innerHTML = "<div style='text-align:center; color:#666; padding:10px;'>⚠️ 查無符合條件的資料</div>"; document.getElementById('admin-list').innerHTML = ""; return; } var st = res.stats; var repHtml = `<div><b>[${mode === 'all' ? '全部歷史' : dateVal}]</b></div><div>篩選人數: <b>${st.count}</b></div><div>累計開口: ${st.totalSpoke} | 渡眾: ${st.totalConv} | 入班: ${st.totalClass}</div><div>運動人次: ${st.totalSport}</div>`; document.getElementById('admin-report').innerHTML = repHtml; document.getElementById('admin-report').style.display = 'block'; var listHtml = res.list.map(u => { var badges = ""; if(u.sportCount > 0) badges += `<span style='background:#8bc34a'>運${u.sportCount}</span>`; if(u.readCount > 0) badges += `<span style='background:#81d4fa'>讀${u.readCount}</span>`; if(u.spoke > 0) badges += `<span style='background:#ff8a80'>開${u.spoke}</span>`; if(u.conv > 0) badges += `<span style='background:#ffd54f'>渡${u.conv}</span>`; return `<div class="admin-row"><div style="flex:1"><div style="font-weight:bold;">${escapeHtml(u.name)} <span onclick="openAdminCRMFromPayload('${encodePayload(u.name)}')" style="cursor:pointer; margin-left:5px;">📒</span></div><div style="font-size:10px; color:#999;">${escapeHtml(u.minor)}</div></div><div class="admin-stat-badges" style="text-align:right;">${badges}</div></div>`; }).join(''); document.getElementById('admin-list').innerHTML = listHtml; }).catch(err => { loading(false); alert("連線失敗: " + err); }); } catch(e) { loading(false); alert("前端錯誤: " + e.message); } }
+function sendBroadcast() { var msg = document.getElementById('broadcast-msg').value; if (!msg) { alert("請輸入訊息內容"); return; } var time = document.getElementById('broadcast-time').value; if(confirm("確定要發送這則通知給所有人嗎？")) { loading(true); callApi('broadcast', {msg: msg, time: time}).then(res => { loading(false); if (res.success) { alert("發送成功"); document.getElementById('broadcast-msg').value = ""; } else { alert("發送失敗: " + res.msg); } }); } }
+function loadGlobalLogs(){ var c = document.getElementById('log-container'); c.innerHTML = '<div style="padding:20px; text-align:center;">讀取中...</div>'; callApi('getGlobalLogs').then(res => { var h = ""; if(res.list.length==0) h='<div style="padding:20px; text-align:center;">尚無紀錄</div>'; res.list.forEach(function(l){ var color = "#eee"; if(l.action.includes("運動")) color="#e8f5e9"; if(l.action.includes("讀書")) color="#e3f2fd"; if(l.action.includes("回報")) color="#fff3e0"; h += `<div class="log-item"><div class="log-time">${l.time}</div><div class="log-content"><span style="font-weight:bold; color:#555;">${escapeHtml(l.user)}</span> <span class="log-tag" style="background:${color}">${escapeHtml(l.action)}</span><span>${escapeHtml(l.detail)}</span><div style="font-size:9px; color:#bbb;">(${escapeHtml(l.hall)})</div></div></div>`; }); c.innerHTML = h; }); }
+
+// 🔴 檢查通知狀態函式 (診斷按鈕用)
+function checkPushStatus() {
+    if (!window.OneSignal) { alert("通知系統尚未載入，請稍候..."); return; }
+    
+    // 1. 檢查瀏覽器權限
+    var perm = Notification.permission;
+    if (perm !== "granted") {
+        alert("⚠️ 您的裝置尚未允許通知 (目前狀態: " + perm + ")\n請到手機設定 -> 瀏覽器 -> 開啟通知權限。");
+        return;
+    }
+
+    // 2. 檢查 OneSignal 訂閱狀態 (v16 API)
+    var isSubscribed = OneSignal.User.PushSubscription.optedIn;
+    if (isSubscribed) {
+        alert("✅ 恭喜！您的裝置已成功訂閱通知。\n(如果還是收不到，請確認是否為 iPhone 且已『加入主畫面』)");
+    } else {
+        alert("⚠️ 權限已開，但尚未訂閱。\n請點擊畫面右下角的紅色鈴鐺圖示來訂閱！");
+    }
+}

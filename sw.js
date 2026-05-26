@@ -3,6 +3,8 @@ var CACHE_NAME = 'xd-app-v1';
 var urlsToCache = [
   './',
   'index.html',
+  'styles.css',
+  'app.js',
   'manifest.json'
 ];
 
