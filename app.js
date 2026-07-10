@@ -7,7 +7,6 @@ let CLASSICS_CONTENT = "";
 // 🔴 變數：Wake Lock 與 計時
 let wakeLock = null;
 let classicsStartTime = 0;
-let ttsUtterance = null;
 let readingObserver = null;
 let currentParagraphIndex = 0; // 當前閱讀段落
 let totalParagraphs = 0; // 總段落數
@@ -164,6 +163,7 @@ function showSubjectList() {
     document.getElementById('classics-subtitle').innerText = "請選擇科目";
     document.getElementById('classics-menu-list').style.display = 'block';
     document.getElementById('classics-reader').style.display = 'none';
+    document.getElementById('classics-display-tools').style.display = 'none';
     document.getElementById('classics-ctrl-bar').style.display = 'none';
     
     var html = "";
@@ -183,6 +183,10 @@ function showChapterList(subjectName) {
     currentSubject = subjectName;
     document.getElementById('classics-nav-title').innerText = subjectName;
     document.getElementById('classics-subtitle').innerText = "請選擇篇章";
+    document.getElementById('classics-menu-list').style.display = 'block';
+    document.getElementById('classics-reader').style.display = 'none';
+    document.getElementById('classics-display-tools').style.display = 'none';
+    document.getElementById('classics-ctrl-bar').style.display = 'none';
     
     var chapters = classicsMenuData[subjectName];
     var html = "";
@@ -193,12 +197,40 @@ function showChapterList(subjectName) {
     document.getElementById('classics-menu-list').innerHTML = html;
 }
 
+function requestClassicContent(sheetName) {
+    return callApi('getClassicContentV2', {targetSheet: sheetName}).then(function(res) {
+        if (res && res.error && res.error.indexOf('Unknown action: getClassicContentV2') === 0) {
+            return callApi('getClassicContent', {targetSheet: sheetName});
+        }
+        return res;
+    });
+}
+
+function normalizeClassicPassages(res) {
+    if (res && Array.isArray(res.passages)) {
+        return res.passages.map(function(passage) {
+            return {
+                text: toText(passage.text || passage.original).trim(),
+                translation: toText(passage.translation).trim(),
+                sourceUrl: toText(passage.sourceUrl).trim()
+            };
+        }).filter(function(passage) { return passage.text; });
+    }
+
+    var parser = document.createElement('div');
+    parser.innerHTML = res && res.content ? res.content : '';
+    return Array.from(parser.querySelectorAll('p')).map(function(paragraph) {
+        return { text: paragraph.textContent.trim(), translation: '', sourceUrl: '' };
+    }).filter(function(passage) { return passage.text; });
+}
+
 // 🔴 4. 載入並顯示內容 (第三層)
 function loadChapterContent(title, sheetName) {
     currentChapter = title;
     document.getElementById('classics-menu-list').style.display = 'none';
     document.getElementById('classics-reader').style.display = 'block';
-    document.getElementById('classics-ctrl-bar').style.display = 'flex'; // 顯示控制列
+    document.getElementById('classics-display-tools').style.display = 'grid';
+    document.getElementById('classics-ctrl-bar').style.display = 'grid';
     document.getElementById('classics-nav-title').innerText = title;
     document.getElementById('classics-subtitle').innerText = "閱讀計時中... 螢幕恆亮";
     
@@ -208,20 +240,26 @@ function loadChapterContent(title, sheetName) {
     classicsStartTime = Date.now();
     requestWakeLock();
 
-    callApi('getClassicContent', {targetSheet: sheetName}).then(res => {
+    requestClassicContent(sheetName).then(res => {
          if(res.success) {
-             // 更新全域變數，讓朗讀功能讀到正確的內容
-             CLASSICS_CONTENT = res.content; 
+             var passages = normalizeClassicPassages(res);
+             CLASSICS_CONTENT = passages.map(function(passage) { return passage.text; }).join('\n');
              var reader = document.getElementById('classics-reader');
-             reader.innerHTML = res.content;
+             ClassicsReader.renderChapter(reader, {
+                 chapterTitle: title,
+                 passages: passages,
+                 sourceUrl: res.sourceUrl || ClassicsReader.sourceForChapter(title)
+             });
              
              // 🔴 啟動智慧書籤偵測
              setupReaderObserver();
              // 🔴 恢復閱讀進度
              restoreReadingProgress(title);
          } else {
-             document.getElementById('classics-reader').innerHTML = `<div style="color:red; text-align:center;">無法讀取內容：${res.error}</div>`;
+             document.getElementById('classics-reader').innerHTML = `<div style="color:red; text-align:center;">無法讀取內容：${escapeHtml(res.error)}</div>`;
          }
+    }).catch(function(error) {
+         document.getElementById('classics-reader').innerHTML = `<div style="color:red; text-align:center;">無法讀取內容：${escapeHtml(error.message || error)}</div>`;
     });
 }
 
@@ -229,7 +267,7 @@ function loadChapterContent(title, sheetName) {
 function setupReaderObserver() {
     if (readingObserver) readingObserver.disconnect();
     
-    var paragraphs = document.querySelectorAll('#classics-reader p');
+    var paragraphs = document.querySelectorAll('#classics-reader .classic-passage');
     totalParagraphs = paragraphs.length;
     currentParagraphIndex = 0; // 重置
     
@@ -242,7 +280,7 @@ function setupReaderObserver() {
         entries.forEach(entry => {
             if (entry.isIntersecting) {
                 // 找出這個 p 是第幾個
-                var allP = Array.from(document.querySelectorAll('#classics-reader p'));
+                var allP = Array.from(document.querySelectorAll('#classics-reader .classic-passage'));
                 var index = allP.indexOf(entry.target);
                 if (index !== -1) {
                     currentParagraphIndex = index;
@@ -265,7 +303,7 @@ function restoreReadingProgress(chapterTitle) {
     var lastIndex = gData.reading_bookmark[chapterTitle];
     
     if (lastIndex && lastIndex > 0) {
-        var paragraphs = document.querySelectorAll('#classics-reader p');
+        var paragraphs = document.querySelectorAll('#classics-reader .classic-passage');
         if (paragraphs[lastIndex]) {
             // 自動捲動到該段落
             setTimeout(() => {
@@ -335,7 +373,8 @@ function closeClassics(isBack) {
          if(readingObserver) readingObserver.disconnect();
     }
     
-    if(window.speechSynthesis) window.speechSynthesis.cancel();
+    if(window.ClassicsReader) ClassicsReader.stopSpeech(false);
+    else if(window.speechSynthesis) window.speechSynthesis.cancel();
     releaseWakeLock();
     
     if (!isBack) {
@@ -346,39 +385,22 @@ function closeClassics(isBack) {
 }
 
 function toggleTTS() {
-    if (!window.speechSynthesis) { alert("您的裝置不支援語音朗讀"); return; }
-    if (window.speechSynthesis.speaking) {
-        if (window.speechSynthesis.paused) {
-            window.speechSynthesis.resume();
-            document.getElementById('btn-tts').innerText = "⏸️ 暫停朗讀";
-        } else {
-            window.speechSynthesis.pause();
-            document.getElementById('btn-tts').innerText = "▶️ 繼續朗讀";
-        }
-    } else {
-        // 開始新的朗讀
-        // 從畫面取得文字 (避免有 HTML 標籤)
-        var text = document.getElementById('classics-reader').innerText;
-        ttsUtterance = new SpeechSynthesisUtterance(text);
-        ttsUtterance.lang = "zh-TW"; 
-        ttsUtterance.rate = 1; 
-        window.speechSynthesis.speak(ttsUtterance);
-        document.getElementById('btn-tts').innerText = "⏸️ 暫停朗讀";
-        
-        ttsUtterance.onend = function() {
-            document.getElementById('btn-tts').innerText = "🔊 語音伴讀";
-        };
-    }
+    if (window.ClassicsReader) ClassicsReader.speakFull();
 }
 
 // 🔴 7. 批次爬蟲 (由 APP 觸發)
 function runBatchCrawler() {
-   if(!confirm("確定要執行爬蟲嗎？\n請確保您已在 Google Sheet 的 [ClassicsMenu] 中填入網址。")) return;
+   if(!confirm("確定要執行新版爬蟲嗎？\n將更新各章節的原文、現代漢語與來源網址。")) return;
    
    loading(true);
-   callApi('batchCrawl').then(res => {
+   callApi('batchCrawlV2').then(res => {
       loading(false);
-      alert(res.msg);
+      if (res.error && res.error.indexOf('Unknown action: batchCrawlV2') === 0) {
+         alert("Apps Script 尚未加入新版經典爬蟲，請先部署 ClassicsUpgrade.gs。");
+         return;
+      }
+      var details = res.errors && res.errors.length ? "\n\n" + res.errors.join("\n") : "";
+      alert((res.msg || res.error || "執行完成") + details);
    });
 }
 

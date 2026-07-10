@@ -1,11 +1,13 @@
 // sw.js
-var CACHE_NAME = 'xd-app-v1';
+var CACHE_NAME = 'xd-app-v2';
 var urlsToCache = [
   './',
   'index.html',
   'styles.css',
+  'classics-reader.js',
   'app.js',
-  'manifest.json'
+  'manifest.json',
+  'https://cdnjs.cloudflare.com/ajax/libs/pinyin-pro/3.28.1/index.min.js'
 ];
 
 self.addEventListener('install', function(event) {

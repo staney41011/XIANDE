@@ -88,11 +88,31 @@
           </div>
        </div>
 
-       <div id="classics-reader" style="flex:1; overflow-y:auto; padding:20px; display:none; font-size: 20px; line-height: 1.8; text-align: justify;">
+       <div id="classics-display-tools" class="classics-display-tools">
+          <div class="phonetic-tabs" role="group" aria-label="經文標音">
+             <button type="button" class="phonetic-tab active" data-phonetic-mode="original" aria-pressed="true" onclick="ClassicsReader.setPhoneticMode('original')">原文</button>
+             <button type="button" class="phonetic-tab" data-phonetic-mode="zhuyin" aria-pressed="false" onclick="ClassicsReader.setPhoneticMode('zhuyin')">注音</button>
+             <button type="button" class="phonetic-tab" data-phonetic-mode="pinyin" aria-pressed="false" onclick="ClassicsReader.setPhoneticMode('pinyin')">拼音</button>
           </div>
+          <button id="btn-translation-all" type="button" class="translation-all-btn" aria-pressed="false" onclick="ClassicsReader.toggleAllTranslations()">展開白話</button>
+       </div>
 
-       <div id="classics-ctrl-bar" style="padding: 10px; border-top: 1px solid #eee; display: none; gap: 10px;">
-          <button id="btn-tts" class="btn" style="background:var(--blue); flex:1;" onclick="toggleTTS()">🔊 語音伴讀</button>
+       <div id="classics-reader" class="classics-reader"></div>
+
+       <div id="classics-ctrl-bar" class="classics-ctrl-bar">
+          <label class="tts-voice-field" for="tts-voice">
+             <span>語音</span>
+             <select id="tts-voice" aria-label="選擇中文語音" onchange="ClassicsReader.handleVoiceChange()">
+                <option value="">系統中文語音</option>
+             </select>
+          </label>
+          <div class="tts-actions" role="group" aria-label="朗讀控制">
+             <button type="button" class="tts-icon-btn" title="全文朗讀" aria-label="全文朗讀" onclick="ClassicsReader.speakFull()">▶</button>
+             <button id="tts-loop" type="button" class="tts-icon-btn" title="全文循環朗讀" aria-label="全文循環朗讀" onclick="ClassicsReader.speakLoop()">↻</button>
+             <button id="tts-pause" type="button" class="tts-icon-btn" title="暫停朗讀" aria-label="暫停朗讀" onclick="ClassicsReader.togglePause()">⏸</button>
+             <button type="button" class="tts-icon-btn" title="停止朗讀" aria-label="停止朗讀" onclick="ClassicsReader.stopSpeech()">■</button>
+          </div>
+          <div id="tts-status" class="tts-status" aria-live="polite"></div>
        </div>
     </div>
 
@@ -263,6 +283,8 @@
     </div>
   </div>
 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pinyin-pro/3.28.1/index.min.js" integrity="sha384-fZUrCbNACAmjqGdoMaI/ZmF0IOGC5JmHsRlbK4XHfprfBg9Ai8LwDunglXG9sTbf" crossorigin="anonymous"></script>
+  <script src="classics-reader.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
