@@ -1,5 +1,4 @@
-// Deploy this file beside Code.gs, then add the two V2 actions documented below.
-// The original crawler remains available as a rollback path.
+// Enhanced classics reader and rate-limited Ctext importer.
 
 var ANALECTS_CTEXT_URLS_V2 = {
   "學而第一": "https://ctext.org/analects/xue-er/zh",
@@ -50,6 +49,7 @@ function getClassicContentV2(sheetName) {
     if (!original) return;
     var translation = row[1] ? String(row[1]).trim() : "";
     var sourceUrl = row[2] ? String(row[2]).trim() : chapterSource;
+    if (!chapterSource && sourceUrl) chapterSource = sourceUrl;
     passages.push({ text: original, translation: translation, sourceUrl: sourceUrl });
     legacyHtml += "<p>" + escapeClassicHtmlV2(original) + "</p>";
   });
@@ -63,6 +63,15 @@ function getClassicContentV2(sheetName) {
 }
 
 function batchProcessClassicsV2() {
+  return processClassicsMenuRowsV3(false);
+}
+
+// One-time importer for rows that explicitly contain a Ctext URL in column D.
+function crawlConfiguredClassicsV3() {
+  return processClassicsMenuRowsV3(true);
+}
+
+function processClassicsMenuRowsV3(configuredOnly) {
   var spreadsheet = getSpreadsheet();
   var menuSheet = spreadsheet.getSheetByName("ClassicsMenu");
   if (!menuSheet) return { success: false, msg: "找不到 ClassicsMenu" };
@@ -73,36 +82,48 @@ function batchProcessClassicsV2() {
   var data = menuSheet.getRange(2, 1, lastRow - 1, 4).getValues();
   var processedCount = 0;
   var skippedCount = 0;
+  var sourceCount = 0;
   var errors = [];
 
   data.forEach(function(row) {
     var sheetName = row[2] ? String(row[2]).trim() : "";
-    if (!sheetName) {
+    var configuredSources = row[3] ? String(row[3]).trim() : "";
+    if (!sheetName || (configuredOnly && !configuredSources)) {
       skippedCount++;
       return;
     }
 
-    var configuredUrl = row[3] ? String(row[3]).trim() : "";
-    var sourceUrl = configuredUrl.indexOf("https://ctext.org/") === 0
-      ? configuredUrl
-      : ANALECTS_CTEXT_URLS_V2[sheetName];
-
-    if (!sourceUrl) {
+    var sources = splitClassicSourceUrlsV3(
+      configuredSources,
+      ANALECTS_CTEXT_URLS_V2[sheetName] || ""
+    );
+    if (!sources.length) {
       skippedCount++;
       errors.push(sheetName + "：找不到 Ctext 網址");
       return;
     }
 
-    try {
-      var bilingual = fetchCtextBilingualV2(sourceUrl);
-      if (!bilingual.originals.length) throw new Error("未抓到原文");
-      if (bilingual.originals.length !== bilingual.translations.length) {
-        throw new Error("原文 " + bilingual.originals.length + " 段、翻譯 " + bilingual.translations.length + " 段，筆數不一致");
-      }
+    if (configuredOnly && isClassicSheetCurrentV3(spreadsheet, sheetName, sources)) {
+      skippedCount++;
+      return;
+    }
 
-      saveClassicBilingualV2(spreadsheet, sheetName, bilingual, sourceUrl);
+    try {
+      var combined = { originals: [], translations: [], sources: [] };
+      sources.forEach(function(sourceUrl) {
+        var result = fetchCtextBilingualV2(sourceUrl);
+        if (!result.originals.length) throw new Error(sourceUrl + " 未抓到原文");
+        result.originals.forEach(function(original, index) {
+          combined.originals.push(original);
+          combined.translations.push(result.translations[index] || "");
+          combined.sources.push(sourceUrl);
+        });
+        sourceCount++;
+        Utilities.sleep(1600);
+      });
+
+      saveClassicBilingualV2(spreadsheet, sheetName, combined);
       processedCount++;
-      Utilities.sleep(1200);
     } catch (error) {
       errors.push(sheetName + "：" + error.message);
     }
@@ -110,20 +131,56 @@ function batchProcessClassicsV2() {
 
   return {
     success: errors.length === 0,
-    msg: "新版爬取完成！成功：" + processedCount + "，跳過：" + skippedCount + "，失敗：" + errors.length,
+    msg: "新版爬取完成！成功：" + processedCount + "，來源頁：" + sourceCount +
+      "，跳過：" + skippedCount + "，失敗：" + errors.length,
     errors: errors
   };
 }
 
+function isClassicSheetCurrentV3(spreadsheet, sheetName, expectedSources) {
+  var sheet = spreadsheet.getSheetByName(sheetName);
+  if (!sheet || sheet.getLastRow() < 2) return false;
+
+  var sourceValues = sheet.getRange(2, 4, sheet.getLastRow() - 1, 1).getValues();
+  var seen = {};
+  var actualSources = [];
+  sourceValues.forEach(function(row) {
+    var source = row[0] ? String(row[0]).trim() : "";
+    if (source && !seen[source]) {
+      seen[source] = true;
+      actualSources.push(source);
+    }
+  });
+
+  return actualSources.length === expectedSources.length && expectedSources.every(function(source) {
+    return !!seen[source];
+  });
+}
+
+function splitClassicSourceUrlsV3(value, fallback) {
+  var sourceText = String(value || fallback || "");
+  var seen = {};
+  return sourceText.split(/\r?\n|\s*\|\s*/).map(function(url) {
+    return url.trim();
+  }).filter(function(url) {
+    if (url.indexOf("https://ctext.org/") !== 0 || seen[url]) return false;
+    seen[url] = true;
+    return true;
+  });
+}
+
 function fetchCtextBilingualV2(sourceUrl) {
-  var separator = sourceUrl.indexOf("?") === -1 ? "?" : "&";
-  var requestUrl = sourceUrl + separator + "xd_translation=zh&ts=" + new Date().getTime();
+  var hashIndex = sourceUrl.indexOf("#");
+  var requestBase = hashIndex === -1 ? sourceUrl : sourceUrl.substring(0, hashIndex);
+  var anchor = hashIndex === -1 ? "" : sourceUrl.substring(hashIndex + 1);
+  var separator = requestBase.indexOf("?") === -1 ? "?" : "&";
+  var requestUrl = requestBase + separator + "xd_translation=zh&ts=" + new Date().getTime();
   var response = UrlFetchApp.fetch(requestUrl, {
     method: "get",
     muteHttpExceptions: true,
     followRedirects: true,
     headers: {
-      "User-Agent": "Mozilla/5.0 (compatible; XIANDE-Classics/2.0; +https://github.com/staney41011/XIANDE)",
+      "User-Agent": "Mozilla/5.0 (compatible; XIANDE-Classics/3.0; +https://github.com/staney41011/XIANDE)",
       "Cookie": "translation=zh"
     }
   });
@@ -131,10 +188,39 @@ function fetchCtextBilingualV2(sourceUrl) {
   var responseCode = response.getResponseCode();
   if (responseCode !== 200) throw new Error("Ctext 回應 HTTP " + responseCode);
 
-  var html = response.getContentText("UTF-8");
+  var html = scopeCtextHtmlV3(response.getContentText("UTF-8"), anchor);
   var originals = extractCtextCellsV2(html, "ctext");
   var translations = extractCtextCellsV2(html, "mctext");
+  if (translations.length !== originals.length) {
+    translations = originals.map(function() { return ""; });
+  }
   return { originals: originals, translations: translations };
+}
+
+function scopeCtextHtmlV3(html, anchor) {
+  if (!anchor) return html;
+  var decodedAnchor;
+  try {
+    decodedAnchor = decodeURIComponent(anchor);
+  } catch (error) {
+    decodedAnchor = anchor;
+  }
+
+  var headingPattern = new RegExp(
+    '<h[1-6][^>]*id="' + escapeRegExpV3(decodedAnchor) + '"[^>]*>',
+    "i"
+  );
+  var heading = headingPattern.exec(html);
+  if (!heading) throw new Error("找不到指定章節：" + decodedAnchor);
+
+  var bodyStart = heading.index + heading[0].length;
+  var body = html.substring(bodyStart);
+  var nextHeading = body.search(/<h[1-6][^>]*class="wikisubsectiontitle"[^>]*>/i);
+  return nextHeading === -1 ? body : body.substring(0, nextHeading);
+}
+
+function escapeRegExpV3(value) {
+  return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function extractCtextCellsV2(html, className) {
@@ -179,25 +265,25 @@ function decodeClassicEntitiesV2(value) {
     });
 }
 
-function saveClassicBilingualV2(spreadsheet, sheetName, bilingual, sourceUrl) {
+function saveClassicBilingualV2(spreadsheet, sheetName, bilingual) {
   var targetSheet = spreadsheet.getSheetByName(sheetName);
   if (!targetSheet) targetSheet = spreadsheet.insertSheet(sheetName, spreadsheet.getNumSheets());
 
   var timestamp = Utilities.formatDate(new Date(), "GMT+8", "yyyy-MM-dd HH:mm:ss");
   var rows = bilingual.originals.map(function(original, index) {
-    return [timestamp, original, bilingual.translations[index], sourceUrl];
+    return [timestamp, original, bilingual.translations[index] || "", bilingual.sources[index] || ""];
   });
 
   var rowsToClear = Math.max(targetSheet.getLastRow(), rows.length + 1, 1);
   targetSheet.getRange(1, 1, rowsToClear, 4).clearContent();
   targetSheet.getRange(1, 1, 1, 4).setValues([["更新時間", "經文內容", "現代漢語", "翻譯來源"]]);
   targetSheet.getRange(1, 1, 1, 4).setBackground("#fff2cc").setFontWeight("bold");
-  targetSheet.getRange(2, 1, rows.length, 4).setValues(rows);
+  if (rows.length) targetSheet.getRange(2, 1, rows.length, 4).setValues(rows);
   targetSheet.setColumnWidth(1, 150);
   targetSheet.setColumnWidth(2, 520);
   targetSheet.setColumnWidth(3, 520);
   targetSheet.setColumnWidth(4, 320);
-  targetSheet.getRange(2, 2, rows.length, 2).setWrap(true);
+  if (rows.length) targetSheet.getRange(2, 2, rows.length, 2).setWrap(true);
 }
 
 function escapeClassicHtmlV2(value) {
@@ -205,10 +291,3 @@ function escapeClassicHtmlV2(value) {
     return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character];
   });
 }
-
-/*
-Add these two branches in handleRequest(e), beside the existing classics actions:
-
-else if (action === "getClassicContentV2") result = getClassicContentV2(params.targetSheet);
-else if (action === "batchCrawlV2") result = batchProcessClassicsV2();
-*/
