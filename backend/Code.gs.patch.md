@@ -22,13 +22,15 @@ var ACTION_HANDLERS = {
   getConfig: function(params) { return getConfig(); },
   register: function(params) { return registerUser(params.u, params.p, params.maj, params.min); },
   login: function(params) { return loginUser(params.u, params.p); },
-  saveGameData: function(params) { return saveGameData(params.u, params.p, params.data, params.log); },
-  getOrchardData: function(params) { return getOrchardData(); },
+  saveGameData: function(params) { return saveGameDataV2(params.u, params.p, params.data, params.log); },
+  getOrchardData: function(params) { return getOrchardDataV2(params.u, params.p); },
+  getOrchardSeasonStatus: function(params) { return getOrchardSeasonStatus(); },
+  getOrchardSeason31Preview: function(params) { return getOrchardSeason31Preview(); },
   getGlobalLogs: function(params) { return { list: getGlobalLogs() }; },
   getPersonalLogs: function(params) { return { list: getPersonalLogs(params.u) }; },
   getCalendarData: function(params) { return getCalendarData(params.u, params.year, params.month); },
   getAdminReport: function(params) { return getAdminReport(params.filters, params.mode, params.dateVal); },
-  getHallDetails: function(params) { return { list: getHallDetails(params.hall) }; },
+  getHallDetails: function(params) { return getHallDetailsV2(params.hall, params.u, params.p); },
   getLatestLog: function(params) { return getLatestLog(); },
   broadcast: function(params) { return sendBroadcast(params.msg, params.time); },
   updateMarquee: function(params) { return updateMarquee(params.msg); },
@@ -48,6 +50,7 @@ function handleRequest(e) {
     var params = parseRequestParams(e);
     if (!params || !params.action) return jsonResponse({ error: "Data Lost" });
 
+    ensureOrchardSeasonRollover();
     var handler = ACTION_HANDLERS[params.action];
     if (!handler) return jsonResponse({ error: "Unknown action: " + params.action });
 

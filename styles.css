@@ -26,12 +26,15 @@ body { font-family: 'Varela Round', sans-serif; background: var(--bg-color); col
 @keyframes scroll { 0% { transform: translateX(0); } 100% { transform: translateX(-100%); } }
 
 .orchard-dashboard { display: flex; justify-content: space-around; background: linear-gradient(135deg, #81c784, #4caf50); color: white; padding: 15px; border-radius: 15px; margin-bottom: 20px; box-shadow: 0 4px 10px rgba(76, 175, 80, 0.3); width: 100%; }
+.orchard-season { margin: 0 0 8px; color: #50645a; font-size: 13px; font-weight: bold; }
 .dash-item { text-align: center; }
 .dash-num { font-size: 24px; font-weight: bold; display: block; }
 .dash-label { font-size: 11px; opacity: 0.9; }
 .orchard-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 20px; width: 100%; padding-bottom: 20px;}
 .tree-container { text-align: center; margin-bottom: 10px; cursor: pointer; transition: transform 0.1s; position: relative;}
 .tree-container:active { transform: scale(0.95); }
+.tree-container.is-locked { cursor: default; opacity: 0.72; }
+.tree-container.is-locked:active { transform: none; }
 .tree-canopy { background: #66bb6a; border-radius: 50% 50% 40% 40%; margin: 0 auto; padding: 5px; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; box-shadow: inset -5px -5px 10px rgba(0,0,0,0.1); position: relative; transition: width 0.3s, height 0.3s; }
 .tree-trunk { background: #8d6e63; margin: -2px auto 0 auto; border-radius: 0 0 5px 5px;}
 .tree-scale-s .tree-canopy { width: 100px; min-height: 80px; } .tree-scale-s .tree-trunk { width: 15px; height: 20px; }

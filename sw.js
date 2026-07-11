@@ -1,5 +1,5 @@
 // sw.js
-var CACHE_NAME = 'xd-app-v2';
+var CACHE_NAME = 'xd-app-v3';
 var urlsToCache = [
   './',
   'index.html',
@@ -16,6 +16,20 @@ self.addEventListener('install', function(event) {
       .then(function(cache) {
         return cache.addAll(urlsToCache);
       })
+  );
+});
+
+self.addEventListener('activate', function(event) {
+  event.waitUntil(
+    caches.keys().then(function(keys) {
+      return Promise.all(keys.filter(function(key) {
+        return key.indexOf('xd-app-') === 0 && key !== CACHE_NAME;
+      }).map(function(key) {
+        return caches.delete(key);
+      }));
+    }).then(function() {
+      return self.clients.claim();
+    })
   );
 });
 

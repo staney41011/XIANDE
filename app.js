@@ -626,8 +626,8 @@ function toggleTimer(){
 }
 function updTimer(s){ var m=Math.floor(s/60), sec=s%60; document.getElementById('timer-display').innerText = (m<10?"0"+m:m)+":"+(sec<10?"0"+sec:sec); }
 function toggleSport(){ if(gData.task_sport_done) return; gData.task_sport_done = true; renderUI(); saveData({action:"運動", detail:"完成今日30分鐘運動！"}); }
-function saveAchievements(){ var addS = parseInt(document.getElementById('inp-spoke').value||0); var addC = parseInt(document.getElementById('inp-conv').value||0); var addCl = parseInt(document.getElementById('inp-class').value||0); if(addS==0 && addC==0 && addCl==0) { alert("請輸入數量"); return; } gData.spoke_count = (gData.spoke_count||0) + addS; gData.convert_count = (gData.convert_count||0) + addC; gData.class_count = (gData.class_count||0) + addCl; loading(true); var msg = `開口${addS}, 渡眾${addC}, 入班${addCl}`; callApi('saveGameData', {u:gUser, p:gPass, data:gData, log:{action:"回報成果", detail: msg}}).then(r => { loading(false); document.getElementById('inp-spoke').value=0; document.getElementById('inp-conv').value=0; document.getElementById('inp-class').value=0; renderUI(); alert("📜 紀錄已同步！"); }); }
-function saveData(logObj){ callApi('saveGameData', {u:gUser, p:gPass, data:gData, log:logObj}); }
+function saveAchievements(){ var addS = parseInt(document.getElementById('inp-spoke').value||0); var addC = parseInt(document.getElementById('inp-conv').value||0); var addCl = parseInt(document.getElementById('inp-class').value||0); if(addS==0 && addC==0 && addCl==0) { alert("請輸入數量"); return; } gData.spoke_count = (gData.spoke_count||0) + addS; gData.convert_count = (gData.convert_count||0) + addC; gData.class_count = (gData.class_count||0) + addCl; loading(true); var msg = `開口${addS}, 渡眾${addC}, 入班${addCl}`; callApi('saveGameData', {u:gUser, p:gPass, data:gData, log:{action:"回報成果", detail: msg}}).then(r => { loading(false); if(r.gameData) gData = r.gameData; document.getElementById('inp-spoke').value=0; document.getElementById('inp-conv').value=0; document.getElementById('inp-class').value=0; renderUI(); alert("📜 紀錄已同步！"); }); }
+function saveData(logObj){ return callApi('saveGameData', {u:gUser, p:gPass, data:gData, log:logObj}).then(function(r){ if(r.gameData) gData = r.gameData; return r; }); }
 function setLocalReminder() { var t = document.getElementById('reminder-time').value; localStorage.setItem("reminder_time", t); if('Notification' in window) Notification.requestPermission(); alert("提醒時間已設定為 " + t); }
 
 // 🔴 缺少的函式補完了
@@ -670,48 +670,82 @@ function loadCalendar() {
 }
 
 // 🔴 這裡我幫您加上了「儀表板數字加總邏輯」，請放心複製
-function loadOrchard(){ 
-  document.getElementById('orchard-container').innerHTML = 'Loading...'; 
-  callApi('getOrchardData').then(data => { 
-    var html = ""; 
-    // 🔴 新增：變數初始化
-    var totalS = 0, totalC = 0, totalCl = 0; 
+function loadOrchard(){
+  document.getElementById('orchard-container').innerHTML = 'Loading...';
+  Promise.all([
+    callApi('getOrchardData', {u:gUser, p:gPass}),
+    callApi('getOrchardSeasonStatus')
+  ]).then(function(results) {
+    var data = results[0] || {};
+    var season = results[1] || {};
+    var html = "";
+    var totalS = 0, totalC = 0, totalCl = 0;
 
-    for(var key in data){ 
-      var h = data[key]; 
-      // 🔴 新增：累加運算
-      var s = Number(h.spoke)||0; 
-      var c = Number(h.convert)||0; 
+    if(data.error) {
+      document.getElementById('orchard-container').innerText = data.error;
+      return;
+    }
+
+    for(var key in data){
+      if(!Object.prototype.hasOwnProperty.call(data, key)) continue;
+      var h = data[key];
+      if(!h || typeof h !== 'object' || !h.name) continue;
+      var s = Number(h.spoke)||0;
+      var c = Number(h.convert)||0;
       var cl = Number(h.joinClass)||0;
       totalS += s; totalC += c; totalCl += cl;
 
-      var fruits = ""; 
-      var redFruits = Math.floor(s / 10); 
-      var totalPoints = redFruits + c + cl; 
-      var treeClass = "tree-scale-s"; 
-      if(totalPoints > 20) treeClass = "tree-scale-l"; else if(totalPoints > 5) treeClass = "tree-scale-m"; 
-      for(var i=0; i<redFruits && i<10; i++) fruits += '<div class="fruit red"></div>'; 
-      for(var i=0; i<c && i<10; i++) fruits += '<div class="fruit gold"></div>'; 
-      for(var i=0; i<cl && i<10; i++) fruits += '<div class="fruit blue"></div>'; 
-      if(totalPoints == 0) fruits = '<span style="font-size:10px; color:#fff;">種子</span>'; 
-      var info = `開口:${s} 渡眾:${c} 入班:${cl}`; 
-      html += `<div class="tree-container ${treeClass}" onclick="openHallModal('${h.name}', '${info}')"><div class="tree-canopy">${fruits}</div><div class="tree-trunk"></div><div class="tree-label">${h.name}<br><span style="font-size:10px;">${h.members}人</span></div></div>`; 
-    } 
-    
-    document.getElementById('orchard-container').innerHTML = html || "無資料"; 
-    
-    // 🔴 新增：更新儀表板數字
-    if(document.getElementById('dash-spoke')) { 
-       document.getElementById('dash-spoke').innerText = totalS; 
-       document.getElementById('dash-conv').innerText = totalC; 
-       document.getElementById('dash-class').innerText = totalCl; 
-    } 
-    
-    loadGlobalLogs(); 
-  }); 
+      var fruits = "";
+      var redFruits = Math.floor(s / 10);
+      var totalPoints = redFruits + c + cl;
+      var treeClass = "tree-scale-s";
+      if(totalPoints > 20) treeClass = "tree-scale-l"; else if(totalPoints > 5) treeClass = "tree-scale-m";
+      for(var i=0; i<redFruits && i<10; i++) fruits += '<div class="fruit red"></div>';
+      for(var j=0; j<c && j<10; j++) fruits += '<div class="fruit gold"></div>';
+      for(var k=0; k<cl && k<10; k++) fruits += '<div class="fruit blue"></div>';
+      if(totalPoints === 0) fruits = '<span style="font-size:10px; color:#fff;">種子</span>';
+
+      var info = `開口:${s} 渡眾:${c} 入班:${cl}`;
+      var payload = encodePayload({name:h.name, info:info});
+      var canView = h.canViewDetails === true;
+      var interaction = canView
+        ? ` role="button" tabindex="0" onclick="openHallModalFromPayload('${payload}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openHallModalFromPayload('${payload}');}"`
+        : ' aria-disabled="true"';
+      html += `<div class="tree-container ${treeClass}${canView?'':' is-locked'}"${interaction}><div class="tree-canopy">${fruits}</div><div class="tree-trunk"></div><div class="tree-label">${escapeHtml(h.name)}<br><span style="font-size:10px;">${Number(h.members)||0}人</span></div></div>`;
+    }
+
+    document.getElementById('orchard-container').innerHTML = html || "無資料";
+    document.getElementById('orchard-season').innerText = season.currentName || "賢德班第31期";
+    document.getElementById('dash-spoke').innerText = totalS;
+    document.getElementById('dash-conv').innerText = totalC;
+    document.getElementById('dash-class').innerText = totalCl;
+    loadGlobalLogs();
+  }).catch(function(error) {
+    document.getElementById('orchard-container').innerText = "果園載入失敗";
+    console.error(error);
+  });
 }
 
-function openHallModal(name, info) { document.getElementById('modal-overlay').style.display = 'flex'; document.getElementById('modal-title').innerText = name; document.getElementById('modal-content').innerHTML = `<div style="background:#f1f8e9; padding:10px; border-radius:10px; margin-bottom:10px;"><b>📊 公堂總成績</b><br>${info}</div><div id="hall-members">成員載入中...</div>`; callApi('getHallDetails', {hall:name}).then(res => { var h = res.list.map(m => `<div class="member-row"><span>${escapeHtml(m.name)}</span><span>開${m.s}/渡${m.c}/班${m.cl}</span></div>`).join(''); document.getElementById('hall-members').innerHTML = h; }); }
+function openHallModalFromPayload(payload) {
+  var value = decodePayload(payload);
+  openHallModal(value.name, value.info);
+}
+
+function openHallModal(name, info) {
+  document.getElementById('modal-overlay').style.display = 'flex';
+  document.getElementById('modal-title').innerText = name;
+  document.getElementById('modal-content').innerHTML = `<div style="background:#f1f8e9; padding:10px; border-radius:8px; margin-bottom:10px;"><b>📊 公堂總成績</b><br>${escapeHtml(info)}</div><div id="hall-members">成員載入中...</div>`;
+  callApi('getHallDetails', {hall:name, u:gUser, p:gPass}).then(function(res) {
+    if(res.error || res.success === false) {
+      document.getElementById('hall-members').innerText = res.error || "無法讀取名單";
+      return;
+    }
+    var members = (res.list || []).map(function(member) {
+      return `<div class="member-row"><span>${escapeHtml(member.name)}</span><span>開${Number(member.s)||0}/渡${Number(member.c)||0}/班${Number(member.cl)||0}</span></div>`;
+    }).join('');
+    document.getElementById('hall-members').innerHTML = members || "無成員資料";
+  });
+}
 function updateMarquee() { var msg = document.getElementById('adm-marquee').value; if(!msg) return; callApi('updateMarquee', {msg:msg}).then(r => { alert(r.msg); document.getElementById('marquee-text').innerText = msg; }); }
 function runAdminQuery() { try { if(Object.keys(menuConfig).length === 0) { alert("系統資料載入中，請稍後再試..."); return; } var filters = { major: document.getElementById('adm-maj').value, minor: document.getElementById('adm-min').value, hasSport: document.getElementById('f-sport').checked, hasRead: document.getElementById('f-read').checked, hasSpoke: document.getElementById('f-spoke').checked, hasConv: document.getElementById('f-conv').checked, hasClass: document.getElementById('f-class').checked }; var mode = document.getElementById('adm-mode').value; var dateVal = ""; if(mode === 'date') dateVal = document.getElementById('adm-date').value; if(mode === 'month') dateVal = document.getElementById('adm-month').value; loading(true); callApi('getAdminReport', {filters:filters, mode:mode, dateVal:dateVal}).then(res => { loading(false); if(res.error) { alert("系統錯誤: " + res.error); return; } if(!res.list || res.list.length === 0) { document.getElementById('admin-report').style.display = 'block'; document.getElementById('admin-report').innerHTML = "<div style='text-align:center; color:#666; padding:10px;'>⚠️ 查無符合條件的資料</div>"; document.getElementById('admin-list').innerHTML = ""; return; } var st = res.stats; var repHtml = `<div><b>[${mode === 'all' ? '全部歷史' : dateVal}]</b></div><div>篩選人數: <b>${st.count}</b></div><div>累計開口: ${st.totalSpoke} | 渡眾: ${st.totalConv} | 入班: ${st.totalClass}</div><div>運動人次: ${st.totalSport}</div>`; document.getElementById('admin-report').innerHTML = repHtml; document.getElementById('admin-report').style.display = 'block'; var listHtml = res.list.map(u => { var badges = ""; if(u.sportCount > 0) badges += `<span style='background:#8bc34a'>運${u.sportCount}</span>`; if(u.readCount > 0) badges += `<span style='background:#81d4fa'>讀${u.readCount}</span>`; if(u.spoke > 0) badges += `<span style='background:#ff8a80'>開${u.spoke}</span>`; if(u.conv > 0) badges += `<span style='background:#ffd54f'>渡${u.conv}</span>`; return `<div class="admin-row"><div style="flex:1"><div style="font-weight:bold;">${escapeHtml(u.name)} <span onclick="openAdminCRMFromPayload('${encodePayload(u.name)}')" style="cursor:pointer; margin-left:5px;">📒</span></div><div style="font-size:10px; color:#999;">${escapeHtml(u.minor)}</div></div><div class="admin-stat-badges" style="text-align:right;">${badges}</div></div>`; }).join(''); document.getElementById('admin-list').innerHTML = listHtml; }).catch(err => { loading(false); alert("連線失敗: " + err); }); } catch(e) { loading(false); alert("前端錯誤: " + e.message); } }
 function sendBroadcast() { var msg = document.getElementById('broadcast-msg').value; if (!msg) { alert("請輸入訊息內容"); return; } var time = document.getElementById('broadcast-time').value; if(confirm("確定要發送這則通知給所有人嗎？")) { loading(true); callApi('broadcast', {msg: msg, time: time}).then(res => { loading(false); if (res.success) { alert("發送成功"); document.getElementById('broadcast-msg').value = ""; } else { alert("發送失敗: " + res.msg); } }); } }

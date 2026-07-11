@@ -127,7 +127,10 @@
 
     if (typeof root.pinyinPro.customPinyin === "function") {
       root.pinyinPro.customPinyin({
+        "學而時習之": "xué ér shí xí zhī",
         "不亦說乎": "bù yì yuè hū",
+        "不亦樂乎": "bù yì lè hū",
+        "其為人也": "qí wéi rén yě",
         "孝弟": "xiào tì",
         "好犯上": "hào fàn shàng",
         "鮮矣": "xiǎn yǐ",
@@ -136,6 +139,11 @@
         "千乘之國": "qiān shèng zhī guó",
         "賢賢易色": "xián xián yì sè",
         "好學": "hào xué",
+        "知之為知之": "zhī zhī wéi zhī zhī",
+        "不知為不知": "bù zhī wéi bù zhī",
+        "是知也": "shì zhì yě",
+        "女知之乎": "rǔ zhī zhī hū",
+        "吾與點也": "wú yǔ diǎn yě",
         "知者": "zhì zhě",
         "樂水": "yào shuǐ",
         "樂山": "yào shān"
@@ -214,6 +222,30 @@
       var annotation = mode === "zhuyin" ? pinyinToZhuyin(item.pinyin, item.num) : item.pinyin;
       return "<ruby><span>" + escapeHtml(original) + "</span><rt>" + escapeHtml(annotation) + "</rt></ruby>";
     }).join("");
+  }
+
+  function buildSpeechTextFromItems(items) {
+    return (Array.isArray(items) ? items : []).map(function(item) {
+      var original = String(item && (item.origin || item.result) || "");
+      if (!item || !item.isZh) return original;
+      return String(item.pinyin || original);
+    }).join(" ")
+      .replace(/\s+([，。！？；：、）》」』])/g, "$1")
+      .replace(/([（《「『])\s+/g, "$1")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function buildSpeechText(text) {
+    if (!configurePinyin()) return String(text || "");
+    var items = root.pinyinPro.pinyin(text, {
+      type: "all",
+      toneType: "symbol",
+      traditional: true,
+      toneSandhi: true,
+      segmentit: 2
+    });
+    return buildSpeechTextFromItems(items) || String(text || "");
   }
 
   function normalizePassages(passages) {
@@ -498,18 +530,19 @@
 
     var passageIndex = state.speechQueue[state.speechPosition];
     var passage = state.passages[passageIndex];
-    var utterance = new root.SpeechSynthesisUtterance(passage.text);
+    var speechText = buildSpeechText(passage.text);
+    var utterance = new root.SpeechSynthesisUtterance(speechText);
     var voice = selectedVoice();
     if (voice) utterance.voice = voice;
     utterance.lang = voice && voice.lang ? voice.lang : "zh-TW";
-    utterance.rate = 0.9;
+    utterance.rate = speechText === passage.text ? 0.9 : 0.82;
     utterance.pitch = 1;
 
     utterance.onstart = function() {
       if (token !== state.speechToken) return;
       state.currentSpeechIndex = passageIndex;
       highlightSpeechPassage(passageIndex);
-      setSpeechStatus("第 " + (passageIndex + 1) + " / " + state.passages.length + " 句");
+      setSpeechStatus("第 " + (passageIndex + 1) + " / " + state.passages.length + " 句 · 拼音導讀");
       updateSpeechButtons();
     };
 
@@ -564,7 +597,8 @@
       escapeHtml: escapeHtml,
       stripPinyinTone: stripPinyinTone,
       pinyinToZhuyin: pinyinToZhuyin,
-      safeSourceUrl: safeSourceUrl
+      safeSourceUrl: safeSourceUrl,
+      buildSpeechTextFromItems: buildSpeechTextFromItems
     }
   };
 });
