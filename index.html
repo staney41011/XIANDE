@@ -81,6 +81,16 @@
           <button class="btn btn-warn" style="width: auto; font-size:12px; padding:5px 10px;" onclick="closeClassics()">關閉</button>
        </div>
 
+       <div id="classics-search-panel" class="classics-search-panel">
+          <form class="classics-search-form" role="search" onsubmit="submitClassicSearch(event)">
+             <label class="sr-only" for="classics-search-input">搜尋所有經典</label>
+             <input id="classics-search-input" type="search" inputmode="search" autocomplete="off" placeholder="搜尋所有經典的原文或白話文" oninput="handleClassicSearchInput()">
+             <button type="submit" class="classics-search-submit">搜尋</button>
+             <button id="classics-search-clear" type="button" class="classics-search-clear" title="清除搜尋" aria-label="清除搜尋" onclick="clearClassicSearch()" hidden>×</button>
+          </form>
+          <div id="classics-search-status" class="classics-search-status" aria-live="polite">輸入至少兩個字即可跨經典檢索</div>
+       </div>
+
        <div id="classics-menu-list" style="flex:1; overflow-y:auto; padding:10px;">
           <div style="text-align:center; margin-top:20px; color:#999;">
               <div class="spinner" style="margin: 0 auto;"></div>

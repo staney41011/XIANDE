@@ -137,6 +137,20 @@ body { font-family: 'Varela Round', sans-serif; background: var(--bg-color); col
 
 /* 經典閱讀 */
 #v-classics { background: #f7f8f6; height: 100%; display: none; flex-direction: column; }
+.classics-search-panel { padding: 10px 12px 8px; background: #fff; border-bottom: 1px solid #e7e9e5; flex-shrink: 0; }
+.classics-search-form { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+.classics-search-form input { width: 100%; min-width: 0; height: 42px; padding: 0 42px 0 12px; border: 1px solid #cfd6cc; border-radius: 6px; background: #fff; color: #2f3630; font: inherit; font-size: 15px; }
+.classics-search-form input:focus { border-color: #5d8a7d; outline: 2px solid #dcebe6; outline-offset: 0; }
+.classics-search-submit { height: 42px; padding: 0 16px; border: 1px solid #4e796d; border-radius: 6px; background: #4e796d; color: #fff; font: inherit; font-size: 14px; font-weight: bold; cursor: pointer; }
+.classics-search-clear { position: absolute; top: 5px; right: 72px; width: 32px; height: 32px; border: 0; background: transparent; color: #747c75; font-size: 24px; line-height: 1; cursor: pointer; }
+.classics-search-status { min-height: 17px; padding-top: 6px; color: #737a73; font-size: 11px; }
+.classic-search-result { display: block; width: 100%; padding: 14px 12px; border: 0; border-bottom: 1px solid #e2e6e1; background: #fff; color: #303730; text-align: left; cursor: pointer; }
+.classic-search-result:hover, .classic-search-result:focus-visible { background: #f2f7f4; outline: 0; }
+.classic-search-path { margin-bottom: 7px; color: #477267; font-size: 12px; font-weight: bold; }
+.classic-search-text { font-family: "Noto Serif TC", "PMingLiU", serif; font-size: 17px; line-height: 1.7; word-break: break-word; }
+.classic-search-translation { margin-top: 7px; color: #76654f; font-size: 13px; line-height: 1.6; }
+.classic-search-empty { padding: 38px 16px; color: #858c85; text-align: center; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 .classics-display-tools { display: none; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; padding: 8px 12px; background: #fff; border-bottom: 1px solid #e7e9e5; flex-shrink: 0; }
 .phonetic-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); min-width: 0; border: 1px solid #cfd6cc; border-radius: 6px; overflow: hidden; }
 .phonetic-tab { min-width: 0; height: 38px; border: 0; border-right: 1px solid #cfd6cc; background: #fff; color: #596158; font: inherit; font-size: 13px; font-weight: bold; cursor: pointer; }
@@ -171,6 +185,9 @@ body { font-family: 'Varela Round', sans-serif; background: var(--bg-color); col
 .tts-status { grid-column: 1 / -1; min-height: 14px; color: #798079; font-size: 10px; text-align: center; }
 
 @media (max-width: 430px) {
+  .classics-search-panel { padding-left: 8px; padding-right: 8px; }
+  .classics-search-submit { padding-left: 13px; padding-right: 13px; }
+  .classics-search-clear { right: 66px; }
   .classics-display-tools { grid-template-columns: minmax(0, 1fr) 88px; padding-left: 8px; padding-right: 8px; }
   .translation-all-btn { min-width: 88px; padding: 0 8px; }
   .classics-reader { padding-left: 13px; padding-right: 13px; }

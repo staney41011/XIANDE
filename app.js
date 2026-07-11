@@ -15,6 +15,12 @@ let totalParagraphs = 0; // 總段落數
 let classicsMenuData = {}; // 存後端回傳的目錄結構
 let currentSubject = null;    // 目前選中的科目
 let currentChapter = null; // 目前選中的篇章
+let classicsSearchActive = false;
+let classicsSearchResults = [];
+let classicsSearchTotal = 0;
+let classicsSearchTruncated = false;
+let classicsSearchTimer = null;
+let classicsSearchRequestId = 0;
 
 var gUser=null, gPass=null, gData={}, menuConfig={}, crmData=[];
 var allEvents = [], activeFilters = [], shareDataList = [];
@@ -143,6 +149,7 @@ function openClassics() {
     // 重置狀態
     currentSubject = null;
     currentChapter = null;
+    resetClassicSearchState();
     showSubjectList(); // 顯示科目列表
     
     // 呼叫後端抓取目錄
@@ -159,6 +166,8 @@ function openClassics() {
 // 🔴 2. 顯示科目列表 (第一層)
 function showSubjectList() {
     currentSubject = null;
+    classicsSearchActive = false;
+    showClassicSearchPanel(true);
     document.getElementById('classics-nav-title').innerText = "📚 經典科目";
     document.getElementById('classics-subtitle').innerText = "請選擇科目";
     document.getElementById('classics-menu-list').style.display = 'block';
@@ -181,6 +190,8 @@ function showSubjectList() {
 // 🔴 3. 顯示篇章列表 (第二層)
 function showChapterList(subjectName) {
     currentSubject = subjectName;
+    classicsSearchActive = false;
+    showClassicSearchPanel(true);
     document.getElementById('classics-nav-title').innerText = subjectName;
     document.getElementById('classics-subtitle').innerText = "請選擇篇章";
     document.getElementById('classics-menu-list').style.display = 'block';
@@ -195,6 +206,150 @@ function showChapterList(subjectName) {
         html += `<div class="cms-item" onclick="loadChapterContent('${ch.title}', '${ch.sheet}')" style="padding:15px; border-bottom:1px solid #eee; cursor:pointer;">${ch.title}</div>`;
     });
     document.getElementById('classics-menu-list').innerHTML = html;
+}
+
+function showClassicSearchPanel(show) {
+    document.getElementById('classics-search-panel').style.display = show ? 'block' : 'none';
+}
+
+function resetClassicSearchState() {
+    classicsSearchActive = false;
+    classicsSearchResults = [];
+    classicsSearchTotal = 0;
+    classicsSearchTruncated = false;
+    classicsSearchRequestId++;
+    if (classicsSearchTimer) clearTimeout(classicsSearchTimer);
+    classicsSearchTimer = null;
+
+    var input = document.getElementById('classics-search-input');
+    var clearButton = document.getElementById('classics-search-clear');
+    var status = document.getElementById('classics-search-status');
+    if (input) input.value = '';
+    if (clearButton) clearButton.hidden = true;
+    if (status) status.innerText = '輸入至少兩個字即可跨經典檢索';
+}
+
+function handleClassicSearchInput() {
+    var input = document.getElementById('classics-search-input');
+    var query = input.value.trim();
+    document.getElementById('classics-search-clear').hidden = !query;
+    if (classicsSearchTimer) clearTimeout(classicsSearchTimer);
+
+    if (query.length < 2) {
+        classicsSearchRequestId++;
+        if (classicsSearchActive) {
+            classicsSearchActive = false;
+            classicsSearchResults = [];
+            classicsSearchTotal = 0;
+            classicsSearchTruncated = false;
+            showSubjectList();
+        }
+        document.getElementById('classics-search-status').innerText = query ? '請再輸入一個字' : '輸入至少兩個字即可跨經典檢索';
+        return;
+    }
+
+    classicsSearchTimer = setTimeout(function() {
+        runClassicSearch(query);
+    }, 350);
+}
+
+function submitClassicSearch(event) {
+    event.preventDefault();
+    if (classicsSearchTimer) clearTimeout(classicsSearchTimer);
+    var query = document.getElementById('classics-search-input').value.trim();
+    if (query.length < 2) {
+        document.getElementById('classics-search-status').innerText = '請至少輸入兩個字';
+        return;
+    }
+    runClassicSearch(query);
+}
+
+function runClassicSearch(query) {
+    var requestId = ++classicsSearchRequestId;
+    classicsSearchActive = true;
+    currentChapter = null;
+    document.getElementById('classics-nav-title').innerText = '跨經典搜尋';
+    document.getElementById('classics-subtitle').innerText = '檢索所有既有經典';
+    document.getElementById('classics-reader').style.display = 'none';
+    document.getElementById('classics-display-tools').style.display = 'none';
+    document.getElementById('classics-ctrl-bar').style.display = 'none';
+    document.getElementById('classics-menu-list').style.display = 'block';
+    document.getElementById('classics-search-status').innerText = '搜尋中...';
+    document.getElementById('classics-menu-list').innerHTML = '<div class="classic-search-empty"><div class="spinner" style="margin:0 auto 12px;"></div>正在檢索全部經典</div>';
+
+    callApi('searchClassics', { q: query, limit: 50 }).then(function(res) {
+        if (requestId !== classicsSearchRequestId) return;
+        if (!res || !res.success) {
+            var message = res && res.error ? res.error : '搜尋失敗，請稍後再試';
+            renderClassicSearchError(message);
+            return;
+        }
+        classicsSearchResults = Array.isArray(res.list) ? res.list : [];
+        classicsSearchTotal = Number(res.total) || classicsSearchResults.length;
+        classicsSearchTruncated = !!res.truncated;
+        renderClassicSearchResults(query, classicsSearchTotal, classicsSearchTruncated);
+    }).catch(function(error) {
+        if (requestId !== classicsSearchRequestId) return;
+        renderClassicSearchError(error.message || error);
+    });
+}
+
+function renderClassicSearchResults(query, total, truncated) {
+    classicsSearchActive = true;
+    showClassicSearchPanel(true);
+    document.getElementById('classics-nav-title').innerText = '跨經典搜尋';
+    document.getElementById('classics-subtitle').innerText = '檢索所有既有經典';
+    document.getElementById('classics-reader').style.display = 'none';
+    document.getElementById('classics-menu-list').style.display = 'block';
+    document.getElementById('classics-display-tools').style.display = 'none';
+    document.getElementById('classics-ctrl-bar').style.display = 'none';
+    document.getElementById('classics-search-status').innerText = total ?
+        '找到 ' + total + ' 筆' + (truncated ? '，先顯示前 50 筆' : '') : '沒有找到相符章句';
+
+    if (!classicsSearchResults.length) {
+        document.getElementById('classics-menu-list').innerHTML = '<div class="classic-search-empty">找不到「' + escapeHtml(query) + '」相關章句</div>';
+        return;
+    }
+
+    var html = classicsSearchResults.map(function(item) {
+        var payload = escapeAttr(encodePayload({
+            subject: item.subject,
+            title: item.title,
+            sheet: item.sheet,
+            row: item.row
+        }));
+        var translation = item.matchedIn === 'translation' && item.translation ?
+            '<div class="classic-search-translation">白話：' + escapeHtml(item.translation) + '</div>' : '';
+        return '<button type="button" class="classic-search-result" onclick="openClassicSearchResult(\'' + payload + '\')">' +
+            '<div class="classic-search-path">' + escapeHtml(item.subject) + '／' + escapeHtml(item.title) + '</div>' +
+            '<div class="classic-search-text">' + escapeHtml(item.text) + '</div>' + translation + '</button>';
+    }).join('');
+    document.getElementById('classics-menu-list').innerHTML = html;
+}
+
+function renderClassicSearchError(message) {
+    document.getElementById('classics-search-status').innerText = '搜尋失敗';
+    document.getElementById('classics-menu-list').innerHTML = '<div class="classic-search-empty">' + escapeHtml(message) + '</div>';
+}
+
+function openClassicSearchResult(encodedItem) {
+    var item = decodePayload(encodedItem);
+    classicsSearchActive = true;
+    currentSubject = item.subject;
+    loadChapterContent(item.title, item.sheet, item.row);
+}
+
+function clearClassicSearch(renderMenu) {
+    classicsSearchRequestId++;
+    classicsSearchActive = false;
+    classicsSearchResults = [];
+    classicsSearchTotal = 0;
+    classicsSearchTruncated = false;
+    var input = document.getElementById('classics-search-input');
+    input.value = '';
+    document.getElementById('classics-search-clear').hidden = true;
+    document.getElementById('classics-search-status').innerText = '輸入至少兩個字即可跨經典檢索';
+    if (renderMenu !== false) showSubjectList();
 }
 
 function requestClassicContent(sheetName) {
@@ -225,8 +380,9 @@ function normalizeClassicPassages(res) {
 }
 
 // 🔴 4. 載入並顯示內容 (第三層)
-function loadChapterContent(title, sheetName) {
+function loadChapterContent(title, sheetName, targetRow) {
     currentChapter = title;
+    showClassicSearchPanel(false);
     document.getElementById('classics-menu-list').style.display = 'none';
     document.getElementById('classics-reader').style.display = 'block';
     document.getElementById('classics-display-tools').style.display = 'grid';
@@ -254,7 +410,18 @@ function loadChapterContent(title, sheetName) {
              // 🔴 啟動智慧書籤偵測
              setupReaderObserver();
              // 🔴 恢復閱讀進度
-             restoreReadingProgress(title);
+             if (targetRow) {
+                 var targetIndex = Math.max(0, Number(targetRow) - 2);
+                 var targetPassage = reader.querySelector('.classic-passage[data-passage-index="' + targetIndex + '"]');
+                 if (targetPassage) {
+                     setTimeout(function() {
+                         targetPassage.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                         targetPassage.classList.add('reading-active');
+                     }, 250);
+                 }
+             } else {
+                 restoreReadingProgress(title);
+             }
          } else {
              document.getElementById('classics-reader').innerHTML = `<div style="color:red; text-align:center;">無法讀取內容：${escapeHtml(res.error)}</div>`;
          }
@@ -317,9 +484,22 @@ function restoreReadingProgress(chapterTitle) {
 // 🔴 5. 返回按鈕邏輯 (整合智慧書籤存檔)
 function backToMenu() {
     if (document.getElementById('classics-reader').style.display === 'block') {
+        var returnToSearch = classicsSearchActive;
         // 如果在閱讀內文，先結算時間 + 存檔進度
         closeClassics(true); // true 代表只是返回上一層，不完全關閉
-        showChapterList(currentSubject); // 返回篇章列表
+        if (returnToSearch) {
+            document.getElementById('classics-reader').style.display = 'none';
+            document.getElementById('classics-menu-list').style.display = 'block';
+            renderClassicSearchResults(
+                document.getElementById('classics-search-input').value.trim(),
+                classicsSearchTotal,
+                classicsSearchTruncated
+            );
+        } else {
+            showChapterList(currentSubject); // 返回篇章列表
+        }
+    } else if (classicsSearchActive) {
+        clearClassicSearch();
     } else if (currentSubject) {
         // 如果在篇章列表，返回科目單
         showSubjectList();

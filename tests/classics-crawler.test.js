@@ -62,3 +62,28 @@ test("recognizes an already imported source set", () => {
     true
   );
 });
+
+test("normalizes punctuation and spacing for classics search", () => {
+  assert.equal(
+    context.normalizeClassicSearchTextV2("學而時習之，不亦說乎？"),
+    "學而時習之不亦說乎"
+  );
+});
+
+test("finds matches across different classics and translation fields", () => {
+  const rows = [
+    ["論語", "學而第一", "學而第一", 2, "學而時習之，不亦說乎？", "", "https://ctext.org/a"],
+    ["金心", "金剛經", "金剛經", 8, "應無所住，而生其心。", "不執著而生清淨心。", "https://ctext.org/b"],
+    ["孟子一", "梁惠王上", "梁惠王上", 3, "王何必曰利？亦有仁義而已矣。", "何必只談利益？", "https://ctext.org/c"]
+  ];
+
+  const originalResult = context.matchClassicSearchRowsV2(rows, "應無所住", 50);
+  assert.equal(originalResult.total, 1);
+  assert.equal(originalResult.list[0].title, "金剛經");
+  assert.equal(originalResult.list[0].matchedIn, "original");
+
+  const translationResult = context.matchClassicSearchRowsV2(rows, "只談利益", 50);
+  assert.equal(translationResult.total, 1);
+  assert.equal(translationResult.list[0].subject, "孟子一");
+  assert.equal(translationResult.list[0].matchedIn, "translation");
+});

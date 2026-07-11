@@ -42,6 +42,8 @@ var ACTION_HANDLERS = {
   manageShare: function(params) { return manageShare(params.subAction, params.data); },
   getClassicsMenu: function(params) { return getClassicsMenu(); },
   getClassicContent: function(params) { return getClassicContent(params.targetSheet); },
+  getClassicContentV2: function(params) { return getClassicContentV2(params.targetSheet); },
+  searchClassics: function(params) { return searchClassicsV2(params.q, params.limit); },
   batchCrawl: function(params) { return batchProcessClassics(); }
 };
 

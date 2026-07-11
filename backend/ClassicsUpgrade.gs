@@ -23,6 +23,8 @@ var ANALECTS_CTEXT_URLS_V2 = {
   "堯曰第二十": "https://ctext.org/analects/yao-yue/zh"
 };
 
+var CLASSICS_SEARCH_INDEX_SHEET_V2 = "ClassicsSearchIndex";
+
 function getClassicContentV2(sheetName) {
   if (!sheetName) return { success: false, error: "未指定分頁名稱" };
 
@@ -129,12 +131,139 @@ function processClassicsMenuRowsV3(configuredOnly) {
     }
   });
 
+  if (processedCount > 0) {
+    try {
+      rebuildClassicsSearchIndexV2();
+    } catch (indexError) {
+      errors.push("搜尋索引：" + indexError.message);
+    }
+  }
+
   return {
     success: errors.length === 0,
     msg: "新版爬取完成！成功：" + processedCount + "，來源頁：" + sourceCount +
       "，跳過：" + skippedCount + "，失敗：" + errors.length,
     errors: errors
   };
+}
+
+function searchClassicsV2(query, requestedLimit) {
+  var normalizedQuery = normalizeClassicSearchTextV2(query);
+  if (normalizedQuery.length < 2) {
+    return { success: false, error: "請至少輸入兩個字" };
+  }
+
+  var spreadsheet = getSpreadsheet();
+  var indexSheet = spreadsheet.getSheetByName(CLASSICS_SEARCH_INDEX_SHEET_V2);
+  if (!indexSheet || indexSheet.getLastRow() < 2) {
+    rebuildClassicsSearchIndexV2();
+    indexSheet = spreadsheet.getSheetByName(CLASSICS_SEARCH_INDEX_SHEET_V2);
+  }
+
+  var limit = Math.max(1, Math.min(parseInt(requestedLimit, 10) || 50, 100));
+  var rows = indexSheet.getRange(2, 1, indexSheet.getLastRow() - 1, 7).getValues();
+  var matched = matchClassicSearchRowsV2(rows, normalizedQuery, limit);
+  return {
+    success: true,
+    query: String(query || "").trim(),
+    list: matched.list,
+    total: matched.total,
+    truncated: matched.total > matched.list.length
+  };
+}
+
+function rebuildClassicsSearchIndexV2() {
+  var spreadsheet = getSpreadsheet();
+  var menuSheet = spreadsheet.getSheetByName("ClassicsMenu");
+  if (!menuSheet) throw new Error("找不到 ClassicsMenu");
+
+  var menuLastRow = menuSheet.getLastRow();
+  var menuRows = menuLastRow < 2 ? [] :
+    menuSheet.getRange(2, 1, menuLastRow - 1, 3).getValues();
+  var indexRows = [];
+  var seenSheets = {};
+
+  menuRows.forEach(function(menuRow) {
+    var subject = menuRow[0] ? String(menuRow[0]).trim() : "";
+    var title = menuRow[1] ? String(menuRow[1]).trim() : "";
+    var sheetName = menuRow[2] ? String(menuRow[2]).trim() : "";
+    if (!subject || !title || !sheetName || seenSheets[sheetName]) return;
+    seenSheets[sheetName] = true;
+
+    var contentSheet = spreadsheet.getSheetByName(sheetName);
+    if (!contentSheet || contentSheet.getLastRow() < 2) return;
+    var contentRows = contentSheet.getRange(2, 2, contentSheet.getLastRow() - 1, 3).getValues();
+    contentRows.forEach(function(contentRow, index) {
+      var original = contentRow[0] ? String(contentRow[0]).trim() : "";
+      if (!original) return;
+      indexRows.push([
+        subject,
+        title,
+        sheetName,
+        index + 2,
+        original,
+        contentRow[1] ? String(contentRow[1]).trim() : "",
+        contentRow[2] ? String(contentRow[2]).trim() : ""
+      ]);
+    });
+  });
+
+  var indexSheet = spreadsheet.getSheetByName(CLASSICS_SEARCH_INDEX_SHEET_V2);
+  if (!indexSheet) indexSheet = spreadsheet.insertSheet(CLASSICS_SEARCH_INDEX_SHEET_V2);
+  indexSheet.clear();
+  indexSheet.getRange(1, 1, 1, 7).setValues([[
+    "大科目", "篇名", "對應分頁", "原始列", "經文內容", "現代漢語", "來源"
+  ]]);
+  indexSheet.getRange(1, 1, 1, 7).setBackground("#d9ead3").setFontWeight("bold");
+  if (indexRows.length) indexSheet.getRange(2, 1, indexRows.length, 7).setValues(indexRows);
+  indexSheet.setFrozenRows(1);
+  indexSheet.hideSheet();
+
+  return {
+    success: true,
+    msg: "經典搜尋索引已更新，共 " + indexRows.length + " 筆章句",
+    count: indexRows.length,
+    sheets: Object.keys(seenSheets).length
+  };
+}
+
+function matchClassicSearchRowsV2(rows, normalizedQuery, limit) {
+  var query = normalizeClassicSearchTextV2(normalizedQuery);
+  var results = [];
+
+  rows.forEach(function(row) {
+    var original = row[4] ? String(row[4]).trim() : "";
+    var translation = row[5] ? String(row[5]).trim() : "";
+    var originalMatches = normalizeClassicSearchTextV2(original).indexOf(query) !== -1;
+    var translationMatches = normalizeClassicSearchTextV2(translation).indexOf(query) !== -1;
+    if (!originalMatches && !translationMatches) return;
+
+    results.push({
+      subject: row[0] ? String(row[0]) : "",
+      title: row[1] ? String(row[1]) : "",
+      sheet: row[2] ? String(row[2]) : "",
+      row: Number(row[3]) || 0,
+      text: original,
+      translation: translation,
+      sourceUrl: row[6] ? String(row[6]) : "",
+      matchedIn: originalMatches ? "original" : "translation"
+    });
+  });
+
+  results.sort(function(a, b) {
+    if (a.matchedIn !== b.matchedIn) return a.matchedIn === "original" ? -1 : 1;
+    if (a.subject !== b.subject) return a.subject.localeCompare(b.subject, "zh-Hant");
+    if (a.title !== b.title) return a.title.localeCompare(b.title, "zh-Hant");
+    return a.row - b.row;
+  });
+
+  return { list: results.slice(0, limit), total: results.length };
+}
+
+function normalizeClassicSearchTextV2(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[\s，。！？；：、,.!?;:'"「」『』（）()《》〈〉【】\[\]{}…—\-]/g, "");
 }
 
 function isClassicSheetCurrentV3(spreadsheet, sheetName, expectedSources) {
