@@ -9,7 +9,7 @@
   
   <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
   <script>
-    const APP_VERSION = "20260712-Collaboration-V1";
+    const APP_VERSION = "20260712-Community-V3";
 
     (function checkUpdate() {
       const savedVersion = localStorage.getItem("app_version");
@@ -145,6 +145,7 @@
         <div class="card" style="border-left: 5px solid #00c300;">
            <div class="help-btn" onclick="alert('左滑查看更多。\n點擊按鈕可同時喚起圖片與文字分享。')">?</div>
            <h3 style="margin-top:0; color:#00c300; margin-bottom:15px;">🗣️ 方便開口包</h3>
+           <button type="button" class="share-add-btn" onclick="openPublicShareModal()">＋ 新增分享內容</button>
            <div id="share-loading" style="font-size:12px; color:#999; text-align:center;">載入中...</div>
            <div id="share-container" class="share-scroll-x" style="display:none;"></div>
         </div>
@@ -263,9 +264,12 @@
               <div class="admin-menu-btn" onclick="switchAdminView('report')">
                  <span class="admin-menu-icon">📊</span>數據報表
               </div>
-              <div class="admin-menu-btn" onclick="runBatchCrawler()">
-                 <span class="admin-menu-icon">📚</span>經典更新
-              </div>
+               <div class="admin-menu-btn" onclick="runBatchCrawler()">
+                  <span class="admin-menu-icon">📚</span>經典更新
+               </div>
+               <div class="admin-menu-btn" onclick="switchAdminView('roles'); searchRoleMembers()">
+                  <span class="admin-menu-icon">👥</span>身分管理
+               </div>
            </div>
 
            <div id="adm-view-promo" style="display:none;">
@@ -286,13 +290,14 @@
               <button class="btn btn-warn" onclick="sendBroadcast()">發送推播</button>
            </div>
 
-           <div id="adm-view-report" style="display:none;">
+            <div id="adm-view-report" style="display:none;">
               <h4 style="border-bottom:1px solid #eee; padding-bottom:5px;">📊 數據查詢</h4>
               <div style="margin-bottom:15px; display:flex; gap:10px;">
                 <select id="adm-mode" class="input-field" onchange="toggleAdmDateInput()" style="flex:1;"><option value="all">全部歷史</option><option value="date">指定日期</option><option value="month">指定月份</option></select>
                 <div id="adm-date-box" style="flex:1; display:none;"><input type="date" id="adm-date" class="input-field"></div>
                 <div id="adm-month-box" style="flex:1; display:none;"><input type="month" id="adm-month" class="input-field"></div>
-              </div>
+            </div>
+
               <div style="display:flex; gap:5px; margin-bottom:10px;"><select id="adm-maj" class="input-field" onchange="admUpdMin()"><option value="全部">全部團隊</option></select><select id="adm-min" class="input-field"><option value="全部">全部公堂</option></select></div>
               <div class="filter-group" style="margin-bottom:15px;">
                 <label class="filter-label"><input type="checkbox" id="f-sport">🏃 運動</label>
@@ -304,6 +309,12 @@
               <button class="btn btn-primary" onclick="runAdminQuery()">🔍 查詢報表</button>
               <div id="admin-report" class="admin-report-box" style="display:none; margin-top:15px;"></div>
               <div id="admin-list" style="margin-top:10px;"></div>
+           </div>
+
+           <div id="adm-view-roles" style="display:none;">
+              <h4 style="border-bottom:1px solid #eee; padding-bottom:5px;">學長姐身分管理</h4>
+              <div class="role-search-row"><input id="role-search" type="search" class="input-field" placeholder="搜尋姓名或公堂"><button type="button" class="btn btn-primary" onclick="searchRoleMembers()">搜尋</button></div>
+              <div id="role-member-list"></div>
            </div>
 
          </div>

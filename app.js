@@ -16,15 +16,20 @@ let classicsMenuData = {}; // 存後端回傳的目錄結構
 let currentSubject = null;    // 目前選中的科目
 let currentChapter = null; // 目前選中的篇章
 let classicsSearchActive = false;
+let classicsFavoritesActive = false;
 let classicsSearchResults = [];
 let classicsSearchTotal = 0;
 let classicsSearchTruncated = false;
 let classicsSearchTimer = null;
 let classicsSearchRequestId = 0;
+let currentChapterSheet = null;
+let classicFavoriteSaveTimer = null;
+let crmMemberSearchTimer = null;
+let crmCrossHallSelected = new Set();
 
 var gUser=null, gPass=null, gData={}, menuConfig={}, crmData=[];
 var allEvents = [], activeFilters = [], shareDataList = [];
-var eventCategories = [], eventCanManage = false, crmMemberOptions = [];
+var eventCategories = [], eventCanManage = false, eventCanAdd = false, crmMemberOptions = [];
 var cmsUploadFiles = []; 
 var timerInt=null, isTimer=false;
 var curYear = new Date().getFullYear(), curMonth = new Date().getMonth() + 1;
@@ -168,6 +173,7 @@ function openClassics() {
 function showSubjectList() {
     currentSubject = null;
     classicsSearchActive = false;
+    classicsFavoritesActive = false;
     showClassicSearchPanel(true);
     document.getElementById('classics-nav-title').innerText = "📚 經典科目";
     document.getElementById('classics-subtitle').innerText = "請選擇科目";
@@ -176,7 +182,8 @@ function showSubjectList() {
     document.getElementById('classics-display-tools').style.display = 'none';
     document.getElementById('classics-ctrl-bar').style.display = 'none';
     
-    var html = "";
+    var favorites = Array.isArray(gData.classic_favorites) ? gData.classic_favorites : [];
+    var html = `<button type="button" class="classic-favorites-entry" onclick="showFavoritePassages()"><span>★ 自選章句</span><strong>${favorites.length}</strong></button>`;
     var subjects = Object.keys(classicsMenuData);
     if (subjects.length === 0) {
        html = "<div style='text-align:center; color:#ccc; margin-top:20px;'>載入中...</div>";
@@ -188,10 +195,34 @@ function showSubjectList() {
     document.getElementById('classics-menu-list').innerHTML = html;
 }
 
+function showFavoritePassages() {
+    classicsSearchActive = false;
+    classicsFavoritesActive = true;
+    currentSubject = null;
+    showClassicSearchPanel(false);
+    document.getElementById('classics-nav-title').innerText = '★ 自選章句';
+    document.getElementById('classics-subtitle').innerText = '您收藏的經典章句';
+    document.getElementById('classics-reader').style.display = 'none';
+    document.getElementById('classics-display-tools').style.display = 'none';
+    document.getElementById('classics-ctrl-bar').style.display = 'none';
+    document.getElementById('classics-menu-list').style.display = 'block';
+    var favorites = Array.isArray(gData.classic_favorites) ? gData.classic_favorites : [];
+    document.getElementById('classics-menu-list').innerHTML = favorites.length ? favorites.map(function(item) {
+        return `<button type="button" class="classic-search-result" onclick="openClassicFavoriteFromPayload('${escapeAttr(encodePayload(item))}')"><div class="classic-search-path">${escapeHtml(item.subject || '經典')}／${escapeHtml(item.title || '')}</div><div class="classic-search-text">${escapeHtml(item.text || '')}</div></button>`;
+    }).join('') : '<div class="classic-search-empty">尚未加入自選章句</div>';
+}
+
+function openClassicFavoriteFromPayload(payload) {
+    var item = decodePayload(payload);
+    currentSubject = item.subject || null;
+    loadChapterContent(item.title, item.sheet, item.row);
+}
+
 // 🔴 3. 顯示篇章列表 (第二層)
 function showChapterList(subjectName) {
     currentSubject = subjectName;
     classicsSearchActive = false;
+    classicsFavoritesActive = false;
     showClassicSearchPanel(true);
     document.getElementById('classics-nav-title').innerText = subjectName;
     document.getElementById('classics-subtitle').innerText = "請選擇篇章";
@@ -383,6 +414,7 @@ function normalizeClassicPassages(res) {
 // 🔴 4. 載入並顯示內容 (第三層)
 function loadChapterContent(title, sheetName, targetRow) {
     currentChapter = title;
+    currentChapterSheet = sheetName;
     showClassicSearchPanel(false);
     document.getElementById('classics-menu-list').style.display = 'none';
     document.getElementById('classics-reader').style.display = 'block';
@@ -402,11 +434,15 @@ function loadChapterContent(title, sheetName, targetRow) {
              var passages = normalizeClassicPassages(res);
              CLASSICS_CONTENT = passages.map(function(passage) { return passage.text; }).join('\n');
              var reader = document.getElementById('classics-reader');
-             ClassicsReader.renderChapter(reader, {
-                 chapterTitle: title,
-                 passages: passages,
-                 sourceUrl: res.sourceUrl || ClassicsReader.sourceForChapter(title)
-             });
+              ClassicsReader.renderChapter(reader, {
+                  chapterTitle: title,
+                  subjectName: currentSubject || '',
+                  sheetName: sheetName,
+                  passages: passages,
+                  sourceUrl: res.sourceUrl || ClassicsReader.sourceForChapter(title),
+                  favorites: Array.isArray(gData.classic_favorites) ? gData.classic_favorites : [],
+                  onFavoriteToggle: updateClassicFavorite
+              });
              
              // 🔴 啟動智慧書籤偵測
              setupReaderObserver();
@@ -429,6 +465,19 @@ function loadChapterContent(title, sheetName, targetRow) {
     }).catch(function(error) {
          document.getElementById('classics-reader').innerHTML = `<div style="color:red; text-align:center;">無法讀取內容：${escapeHtml(error.message || error)}</div>`;
     });
+}
+
+function updateClassicFavorite(item, selected) {
+    var favorites = Array.isArray(gData.classic_favorites) ? gData.classic_favorites.slice() : [];
+    favorites = favorites.filter(function(entry) { return entry.id !== item.id; });
+    if (selected) favorites.unshift(item);
+    gData.classic_favorites = favorites.slice(0, 200);
+    if (classicFavoriteSaveTimer) clearTimeout(classicFavoriteSaveTimer);
+    classicFavoriteSaveTimer = setTimeout(function() {
+        callApi('saveGameData', {u:gUser, p:gPass, data:gData, log:null}).then(function(res) {
+            if (res && res.gameData) gData = res.gameData;
+        });
+    }, 400);
 }
 
 // 🔴 新增：設定段落偵測器 (Intersection Observer)
@@ -496,11 +545,15 @@ function backToMenu() {
                 classicsSearchTotal,
                 classicsSearchTruncated
             );
+        } else if (classicsFavoritesActive) {
+            showFavoritePassages();
         } else {
             showChapterList(currentSubject); // 返回篇章列表
         }
     } else if (classicsSearchActive) {
         clearClassicSearch();
+    } else if (classicsFavoritesActive) {
+        showSubjectList();
     } else if (currentSubject) {
         // 如果在篇章列表，返回科目單
         showSubjectList();
@@ -587,7 +640,7 @@ function runBatchCrawler() {
 
 // ... Share Logic ...
 function loadShareData() {
-   var isAdmin = (gData.teamMajor === "主領班");
+   var isAdmin = (gData.teamMajor === "主領班" || String(gUser).toUpperCase() === "ADMIN");
    callApi('getShareData', {isAdmin: isAdmin}).then(res => {
       document.getElementById('share-loading').style.display = 'none';
       shareDataList = res.list || [];
@@ -616,6 +669,24 @@ function copyShareText(index) {
    navigator.clipboard.writeText(text).then(() => alert("文字已複製！"));
 }
 
+function openPublicShareModal(){
+   cmsUploadFiles=[];
+   document.getElementById('modal-title').innerText='新增方便開口包';
+   document.getElementById('modal-content').innerHTML=`<label>標題</label><input id="public-share-title" class="input-field" maxlength="60"><label>分享文字</label><textarea id="public-share-text" class="input-field" rows="5" maxlength="2000"></textarea><label class="btn public-upload-btn">選擇圖片（最多 4 張）<input type="file" multiple accept="image/*" hidden onchange="handleCmsFiles(this)"></label><div id="cms-preview" class="preview-grid"></div><button class="btn btn-success" onclick="submitPublicShare()">發布分享</button>`;
+   document.getElementById('modal-overlay').style.display='flex';
+}
+
+function submitPublicShare(){
+   var data={title:document.getElementById('public-share-title').value.trim(),text:document.getElementById('public-share-text').value.trim(),images:cmsUploadFiles.slice(0,4)};
+   if(!data.title||!data.text){alert('請填寫標題與分享文字');return;}
+   loading(true);
+   callApi('addPublicShare',{u:gUser,p:gPass,data:data}).then(function(res){
+      loading(false);
+      if(!res.success){alert(res.msg||res.error||'發布失敗');return;}
+      closeModal(); loadShareData(); alert('已加入方便開口包');
+   });
+}
+
 async function nativeShare(index) {
    var item = shareDataList[index];
    try { await navigator.clipboard.writeText(item.text); } catch(e){}
@@ -642,7 +713,7 @@ async function nativeShare(index) {
 
 // ... CMS Logic ...
 function switchAdminView(view) {
-   ['promo', 'broadcast', 'report'].forEach(v => document.getElementById('adm-view-'+v).style.display = 'none');
+   ['promo', 'broadcast', 'report', 'roles'].forEach(v => document.getElementById('adm-view-'+v).style.display = 'none');
    document.getElementById('adm-view-'+view).style.display = 'block';
 }
 function renderCmsList() {
@@ -663,20 +734,34 @@ function openCmsModal(mode, idx) {
    document.getElementById('modal-content').innerHTML = html;
    document.getElementById('modal-overlay').style.display = 'flex';
 }
-function handleCmsFiles(input) {
+async function handleCmsFiles(input) {
    cmsUploadFiles = [];
    document.getElementById('cms-preview').innerHTML = "";
-   if(input.files) {
-      for(var i=0; i<input.files.length; i++) {
-         var file = input.files[i];
-         var reader = new FileReader();
-         reader.onload = function(e) {
-            cmsUploadFiles.push({ base64: e.target.result.split(',')[1], name: file.name });
-            document.getElementById('cms-preview').innerHTML += `<img src="${escapeAttr(e.target.result)}" class="preview-img" alt="">`;
+   if(!input.files) return;
+   var files=Array.from(input.files).slice(0,4);
+   if(input.files.length>4) alert('一次最多選擇 4 張圖片');
+   var prepared=await Promise.all(files.map(prepareShareImage));
+   prepared.forEach(function(image){cmsUploadFiles.push({base64:image.dataUrl.split(',')[1],name:image.name});document.getElementById('cms-preview').insertAdjacentHTML('beforeend',`<img src="${escapeAttr(image.dataUrl)}" class="preview-img" alt="">`);});
+}
+
+function prepareShareImage(file){
+   return new Promise(function(resolve,reject){
+      var reader=new FileReader();
+      reader.onerror=reject;
+      reader.onload=function(event){
+         var image=new Image();
+         image.onerror=reject;
+         image.onload=function(){
+            var scale=Math.min(1,1600/Math.max(image.width,image.height));
+            var canvas=document.createElement('canvas');
+            canvas.width=Math.max(1,Math.round(image.width*scale)); canvas.height=Math.max(1,Math.round(image.height*scale));
+            canvas.getContext('2d').drawImage(image,0,0,canvas.width,canvas.height);
+            resolve({name:file.name,dataUrl:canvas.toDataURL('image/jpeg',0.82)});
          };
-         reader.readAsDataURL(file);
-      }
-   }
+         image.src=event.target.result;
+      };
+      reader.readAsDataURL(file);
+   });
 }
 function submitCms(mode, idx) {
    var title = document.getElementById('cms-title').value;
@@ -705,9 +790,10 @@ function loadEvents() {
    return callApi('getYearlyEvents', {u:gUser, p:gPass}).then(res => {
       if(res.error) { document.getElementById('event-list').innerHTML = `<div style="text-align:center; color:#f44336;">${res.error}</div>`; return; }
       allEvents = res.list || [];
-      eventCategories = res.cats || [];
-      eventCanManage = !!res.canManage;
-      document.getElementById('event-add-btn').hidden = !eventCanManage;
+       eventCategories = res.cats || [];
+       eventCanManage = !!res.canManage;
+       eventCanAdd = !!res.canAdd;
+       document.getElementById('event-add-btn').hidden = !eventCanAdd;
       initFilters();
       var filterHtml = `<div class="chip ${activeFilters.length===0?'active':''}" onclick="toggleFilter('all', this)">全部</div>`;
       eventCategories.forEach(c => { var isActive = activeFilters.includes(c) ? 'active' : ''; filterHtml += `<div class="chip ${isActive}" onclick="toggleFilterFromPayload('${escapeAttr(encodePayload(c))}', this)">${escapeHtml(c)}</div>`; });
@@ -715,7 +801,7 @@ function loadEvents() {
       renderEventList();
    });
 }
-function initFilters() { if(gData.teamMajor === "主領班" || String(gUser).toUpperCase() === "ADMIN") { activeFilters = []; } else { activeFilters = ["中央", "賢德", "仙佛紀念日"]; if(gData.teamMajor && gData.teamMajor.includes("賢")) { activeFilters.push(gData.teamMajor); } } }
+function initFilters() { if(gData.teamMajor === "主領班" || String(gUser).toUpperCase() === "ADMIN") { activeFilters = []; } else { activeFilters = ["中央", "賢德", "仙佛紀念日"]; if(gData.teamMajor && gData.teamMajor.includes("賢")) activeFilters.push(gData.teamMajor); if(gData.teamMinor) activeFilters.push(gData.teamMinor+"專屬"); } }
 function toggleFilterFromPayload(payload, element) { toggleFilter(decodePayload(payload), element); }
 function toggleFilter(cat, el) { if(cat === 'all') { activeFilters = []; var chips = document.querySelectorAll('.chip'); chips.forEach(c => c.classList.remove('active')); el.classList.add('active'); } else { document.querySelector('.chip:first-child').classList.remove('active'); if(activeFilters.includes(cat)) { activeFilters = activeFilters.filter(c => c !== cat); el.classList.remove('active'); } else { activeFilters.push(cat); el.classList.add('active'); } } renderEventList(); }
 function renderEventList() {
@@ -741,8 +827,9 @@ function renderEventList() {
       var focusId = '';
       if(!hasScrolled && isTodayOrFuture) { focusId = ' id="today-focus"'; hasScrolled = true; }
       if(isPast) hasPastRendered = true;
-      var editButton = eventCanManage ? `<button type="button" class="event-edit-btn" title="編輯活動" aria-label="編輯活動" onclick="editEventFromPayload('${escapeAttr(encodePayload(eventItem))}')">✎</button>` : '';
-      html += `<div${focusId} class="event-card ${isPast?'past':''} ${focusId?'focus':''}"><div class="event-date-box" style="border-left:5px solid ${getTagColor(eventItem.cat)}"><div class="event-month">${month}月</div><div class="event-day" style="font-size:${day.toString().length>2?'14px':'18px'}">${day}</div><div style="font-size:10px; margin-top:-2px;">週${week}</div></div><div class="event-info"><div class="event-title">${escapeHtml(eventItem.name)}</div>${eventItem.note?`<div class="event-note">${escapeHtml(eventItem.note)}</div>`:''}<div class="event-meta"><span class="tag" style="background:${getTagColor(eventItem.cat)}">${escapeHtml(eventItem.cat)}</span><span>📍 ${escapeHtml(eventItem.loc||'--')}</span><span style="flex:1; text-align:right; font-size:10px; color:#999;">${dateText}</span>${editButton}</div></div></div>`;
+       var editButton = eventItem.canEdit ? `<button type="button" class="event-edit-btn" title="編輯活動" aria-label="編輯活動" onclick="editEventFromPayload('${escapeAttr(encodePayload(eventItem))}')">✎</button>` : '';
+       var hallBadge = eventItem.scope==='hall' ? `<span class="event-hall-badge">${escapeHtml(eventItem.hall)}專屬</span>` : '';
+       html += `<div${focusId} class="event-card ${isPast?'past':''} ${focusId?'focus':''}"><div class="event-date-box" style="border-left:5px solid ${getTagColor(eventItem.cat)}"><div class="event-month">${month}月</div><div class="event-day" style="font-size:${day.toString().length>2?'14px':'18px'}">${day}</div><div style="font-size:10px; margin-top:-2px;">週${week}</div></div><div class="event-info"><div class="event-title">${escapeHtml(eventItem.name)} ${hallBadge}</div>${eventItem.note?`<div class="event-note">${escapeHtml(eventItem.note)}</div>`:''}<div class="event-meta"><span class="tag" style="background:${getTagColor(eventItem.cat)}">${escapeHtml(eventItem.cat)}</span><span>📍 ${escapeHtml(eventItem.loc||'--')}</span><span class="event-date-text">${dateText}</span>${editButton}</div></div></div>`;
    });
    document.getElementById('event-list').innerHTML = html || '<div style="text-align:center; color:#999; padding:20px;">沒有活動</div>';
    setTimeout(function(){ var focus=document.getElementById('today-focus'); if(focus) focus.scrollIntoView({behavior:'smooth',block:'center'}); },300);
@@ -751,17 +838,21 @@ function getTagColor(cat) { if(!cat) return "#ccc"; if(cat.includes("仙佛")) r
 
 function editEventFromPayload(payload) { editEvent(decodePayload(payload)); }
 function editEvent(item) {
-   if(!eventCanManage) return;
+   if((item&&item.id&&!eventCanManage)||(!item&&!eventCanAdd)) return;
    item = item || {id:0,name:'',date:'',end:'',cat:'北賢',loc:'',note:''};
+   if(!eventCanManage&&!item.id) item.cat=(gData.teamMinor||'公堂')+'專屬';
    var categories = eventCategories.slice();
+   if(!eventCanManage) categories=[gData.teamMinor+'專屬'];
    if(item.cat && !categories.includes(item.cat)) categories.push(item.cat);
    var options = categories.map(function(category){ return `<option value="${escapeAttr(category)}" ${category===item.cat?'selected':''}>${escapeHtml(category)}</option>`; }).join('');
    document.getElementById('modal-title').innerText = item.id ? '編輯活動' : '新增活動';
-   document.getElementById('modal-content').innerHTML = `<input id="event-id" type="hidden" value="${escapeAttr(item.id||0)}"><label>活動名稱</label><input id="event-name" class="input-field" value="${escapeAttr(item.name)}"><label>開始日期</label><input id="event-date" type="date" class="input-field" value="${escapeAttr(item.date)}"><label>結束日期</label><input id="event-end" type="date" class="input-field" value="${escapeAttr(item.end||item.date)}"><label>分類</label><select id="event-cat" class="input-field">${options}</select><label>地點</label><input id="event-loc" class="input-field" value="${escapeAttr(item.loc)}"><label>備註</label><textarea id="event-note" class="input-field" rows="3">${escapeHtml(item.note)}</textarea><button class="btn btn-primary" onclick="saveEventItem()">儲存活動</button>`;
+   var deleteButton=item.id&&eventCanManage?`<button class="btn event-delete-btn" onclick="deleteEventItem('${escapeAttr(item.id)}')">刪除活動</button>`:'';
+   var scopeFields=eventCanManage?`<label>顯示範圍</label><select id="event-scope" class="input-field"><option value="global" ${item.scope!=='hall'?'selected':''}>全部成員</option><option value="hall" ${item.scope==='hall'?'selected':''}>限定公堂</option></select><label>限定公堂</label><input id="event-hall" class="input-field" value="${escapeAttr(item.hall||'')}" placeholder="留空代表全部">`:`<input id="event-scope" type="hidden" value="hall"><input id="event-hall" type="hidden" value="${escapeAttr(gData.teamMinor||'')}"><div class="event-permission-note">此活動僅顯示給 ${escapeHtml(gData.teamMinor||'本公堂')} 成員</div>`;
+   document.getElementById('modal-content').innerHTML = `<input id="event-id" type="hidden" value="${escapeAttr(item.id||0)}"><label>活動名稱</label><input id="event-name" class="input-field" value="${escapeAttr(item.name)}"><label>開始日期</label><input id="event-date" type="date" class="input-field" value="${escapeAttr(item.date)}"><label>結束日期</label><input id="event-end" type="date" class="input-field" value="${escapeAttr(item.end||item.date)}"><label>分類</label><select id="event-cat" class="input-field">${options}</select>${scopeFields}<label>地點</label><input id="event-loc" class="input-field" value="${escapeAttr(item.loc)}"><label>備註</label><textarea id="event-note" class="input-field" rows="3">${escapeHtml(item.note)}</textarea><button class="btn btn-primary" onclick="saveEventItem()">儲存活動</button>${deleteButton}`;
    document.getElementById('modal-overlay').style.display = 'flex';
 }
 function saveEventItem() {
-   var item = {id:document.getElementById('event-id').value,name:document.getElementById('event-name').value,date:document.getElementById('event-date').value,end:document.getElementById('event-end').value,cat:document.getElementById('event-cat').value,loc:document.getElementById('event-loc').value,note:document.getElementById('event-note').value};
+   var item = {id:document.getElementById('event-id').value,name:document.getElementById('event-name').value,date:document.getElementById('event-date').value,end:document.getElementById('event-end').value,cat:document.getElementById('event-cat').value,scope:document.getElementById('event-scope').value,hall:document.getElementById('event-hall').value,loc:document.getElementById('event-loc').value,note:document.getElementById('event-note').value};
    loading(true);
    callApi('saveCalendarEvent',{u:gUser,p:gPass,item:item}).then(function(res){ loading(false); if(!res.success){ alert(res.error||'儲存失敗'); return; } closeModal(); loadEvents(); });
 }
@@ -799,9 +890,28 @@ function editCRMFromPayload(payload) { editCRM(decodePayload(payload)); }
 function renderCRMShareSection(item,isNew) {
    if(!isNew&&!item.isOwner) return `<div class="crm-share-section"><strong>共同成全</strong><div class="crm-owner">${[item.owner].concat(item.sharedWith||[]).map(escapeHtml).join('、')}</div></div>`;
    var selected=item.sharedWith||[];
-   var options=crmMemberOptions.map(function(name){ return `<label class="crm-share-option"><input type="checkbox" data-crm-member value="${escapeAttr(name)}" ${selected.includes(name)?'checked':''}><span>${escapeHtml(name)}</span></label>`; }).join('');
-   return `<div class="crm-share-section"><label class="crm-share-option"><input id="crm-share-all" type="checkbox" onchange="toggleAllCRMShareMembers(this.checked)"><span><strong>選擇公堂全部成員</strong></span></label><div class="crm-share-list">${options||'<span class="crm-owner">目前沒有可選成員</span>'}</div></div>`;
+   crmCrossHallSelected = new Set(selected);
+   var localMap={}; crmMemberOptions.forEach(function(name){ localMap[name]=true; });
+   var options=crmMemberOptions.map(function(name){ return `<label class="crm-share-option"><input type="checkbox" data-crm-member data-crm-local value="${escapeAttr(name)}" ${selected.includes(name)?'checked':''} onchange="syncCRMCrossHallSelection()"><span>${escapeHtml(name)}</span></label>`; }).join('');
+   var crossSelected=selected.filter(function(name){ return !localMap[name]; }).map(function(name){ return `<label class="crm-share-option crm-cross-selected"><input type="checkbox" data-crm-member value="${escapeAttr(name)}" checked onchange="syncCRMCrossHallSelection()"><span>${escapeHtml(name)}</span></label>`; }).join('');
+   return `<div class="crm-share-section"><strong>共同成全</strong><label class="crm-share-option crm-share-all"><input id="crm-share-all" type="checkbox" onchange="toggleAllCRMShareMembers(this.checked)"><span>選擇公堂全部成員</span></label><div class="crm-share-list">${options||'<span class="crm-owner">目前沒有可選成員</span>'}</div><div class="crm-cross-hall"><label for="crm-member-search">搜尋跨公堂成員</label><input id="crm-member-search" type="search" class="input-field" placeholder="輸入姓名或公堂" oninput="searchCRMCrossHallMembers(this.value)"><div id="crm-cross-selected" class="crm-share-list">${crossSelected}</div><div id="crm-member-search-results" class="crm-member-search-results"></div></div></div>`;
 }
+
+function searchRoleMembers(){
+   var query=document.getElementById('role-search').value.trim();
+   var box=document.getElementById('role-member-list');
+   box.innerHTML='<div class="crm-owner">搜尋中...</div>';
+   callApi('searchUsersForRole',{u:gUser,p:gPass,q:query}).then(function(res){
+      if(!res.success){box.innerHTML=`<div class="crm-owner">${escapeHtml(res.error||'搜尋失敗')}</div>`;return;}
+      box.innerHTML=(res.list||[]).map(function(user){return `<div class="role-member-row"><div><strong>${escapeHtml(user.name)}</strong><small>${escapeHtml(user.major)}｜${escapeHtml(user.minor)}</small></div><select aria-label="${escapeAttr(user.name)}身分" onchange="setRoleMemberFromPayload('${escapeAttr(encodePayload(user.name))}',this.value)"><option value="成員" ${user.role!=='學長姐'?'selected':''}>成員</option><option value="學長姐" ${user.role==='學長姐'?'selected':''}>學長姐</option></select></div>`;}).join('')||'<div class="crm-owner">找不到成員</div>';
+   });
+}
+
+function setRoleMemberFromPayload(payload,role){
+   var target=decodePayload(payload);
+   callApi('setUserRole',{u:gUser,p:gPass,target:target,role:role}).then(function(res){if(!res.success)alert(res.error||'更新失敗');});
+}
+function deleteEventItem(id){ if(!eventCanManage||!confirm('確定刪除這個活動？')) return; loading(true); callApi('deleteCalendarEvent',{u:gUser,p:gPass,id:id}).then(function(res){ loading(false); if(!res.success){alert(res.error||'刪除失敗');return;} closeModal(); loadEvents(); }); }
 function renderCRMNoteLogs(item) {
    var notes=item.notes||[];
    if(!notes.length) return '<div class="crm-owner">尚無備註</div>';
@@ -816,8 +926,26 @@ function editCRM(item) {
    document.getElementById('modal-content').innerHTML=html;
    document.getElementById('modal-overlay').style.display='flex';
 }
-function toggleAllCRMShareMembers(checked){ document.querySelectorAll('[data-crm-member]').forEach(function(input){ input.checked=checked; }); }
-function selectedCRMShareMembers(){ return Array.from(document.querySelectorAll('[data-crm-member]:checked')).map(function(input){ return input.value; }); }
+function toggleAllCRMShareMembers(checked){ document.querySelectorAll('[data-crm-local]').forEach(function(input){ input.checked=checked; }); syncCRMCrossHallSelection(); }
+function syncCRMCrossHallSelection(){ document.querySelectorAll('[data-crm-member]').forEach(function(input){ if(input.checked) crmCrossHallSelected.add(input.value); else crmCrossHallSelected.delete(input.value); }); }
+function selectedCRMShareMembers(){ syncCRMCrossHallSelection(); return Array.from(crmCrossHallSelected); }
+function searchCRMCrossHallMembers(query){
+   if(crmMemberSearchTimer) clearTimeout(crmMemberSearchTimer);
+   var box=document.getElementById('crm-member-search-results');
+   if(!box) return;
+   query=String(query||'').trim();
+   if(!query){ box.innerHTML=''; return; }
+   box.innerHTML='<div class="crm-owner">搜尋中...</div>';
+   crmMemberSearchTimer=setTimeout(function(){
+      callApi('searchCRMShareMembers',{u:gUser,p:gPass,q:query}).then(function(res){
+         if(!box || !document.body.contains(box)) return;
+         if(!res.success){ box.innerHTML=`<div class="crm-owner">${escapeHtml(res.error||'搜尋失敗')}</div>`; return; }
+         var local={}; crmMemberOptions.forEach(function(name){local[name]=true;});
+         var list=(res.list||[]).filter(function(user){return !local[user.name]&&!crmCrossHallSelected.has(user.name);});
+         box.innerHTML=list.map(function(user){ var checked=crmCrossHallSelected.has(user.name)?'checked':''; return `<label class="crm-member-search-result"><input type="checkbox" data-crm-member value="${escapeAttr(user.name)}" ${checked} onchange="syncCRMCrossHallSelection()"><span><strong>${escapeHtml(user.name)}</strong><small>${escapeHtml(user.major)}｜${escapeHtml(user.minor)}</small></span></label>`; }).join('')||'<div class="crm-owner">找不到跨公堂成員</div>';
+      });
+   },300);
+}
 function saveCRMItem() {
    var isNew=document.getElementById('e-is-new').value==='1';
    var item={recordId:document.getElementById('e-record-id').value,name:document.getElementById('e-name').value,status:document.getElementById('e-status').value,todo:document.getElementById('e-todo').value,remind:document.getElementById('e-remind').value,repeat:document.getElementById('e-repeat').value,sharedWith:selectedCRMShareMembers(),initialNote:isNew?document.getElementById('e-new-note').value:''};
@@ -893,7 +1021,7 @@ function doLogin(){
 }
 function enterGame(){ document.getElementById('auth-screen').style.display='none'; document.getElementById('game-screen').style.display='flex'; renderUI(); }
 function logout(){ if(confirm("登出?")){ localStorage.removeItem("xd_p"); location.reload(); } }
-function renderUI(){ document.getElementById('ui-team').innerText = gData.teamFull; document.getElementById('p-job').innerText = gData.job; updateDashboard(); renderSeason32Goals(true); var ck = document.getElementById('ck-sport'); if(gData.task_sport_done){ ck.style.background='var(--primary)'; ck.style.borderColor='var(--primary)'; } else { ck.style.background='transparent'; ck.style.borderColor='#ddd'; } updTimer(gData.task_read_time||0); }
+function renderUI(){ document.getElementById('ui-team').innerText = gData.teamFull; document.getElementById('p-job').innerText = gData.memberRole==='學長姐' ? (gData.job+'｜學長姐') : gData.job; updateDashboard(); renderSeason32Goals(true); var ck = document.getElementById('ck-sport'); if(gData.task_sport_done){ ck.style.background='var(--primary)'; ck.style.borderColor='var(--primary)'; } else { ck.style.background='transparent'; ck.style.borderColor='#ddd'; } updTimer(gData.task_read_time||0); }
 function addCount(id) { var el = document.getElementById(id); el.value = parseInt(el.value || 0) + 1; updateDashboard(); }
 function minusCount(id) { var el = document.getElementById(id); var val = parseInt(el.value || 0); if (val > 0) { el.value = val - 1; updateDashboard(); } }
 function updateDashboard() { var addS = parseInt(document.getElementById('inp-spoke').value||0); var addC = parseInt(document.getElementById('inp-conv').value||0); var addCl = parseInt(document.getElementById('inp-class').value||0); var totalS = (gData.spoke_count||0) + addS; var totalC = (gData.convert_count||0) + addC; var totalCl = (gData.class_count||0) + addCl; document.getElementById('today-dash').innerText = `📊 今日已累積：開口 ${totalS} | 渡眾 ${totalC} | 入班 ${totalCl}`; }

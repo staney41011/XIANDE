@@ -18,18 +18,21 @@ var WRITE_ACTIONS = {
   batchCrawl: true,
   saveCalendarEvent: true,
   addCRMNote: true,
-  deleteCRMNote: true
+  deleteCRMNote: true,
+  deleteCalendarEvent: true,
+  setUserRole: true,
+  addPublicShare: true
 };
 
 var ACTION_HANDLERS = {
   getConfig: function(params) { return getConfig(); },
   register: function(params) { return registerUser(params.u, params.p, params.maj, params.min); },
-  login: function(params) { return loginUser(params.u, params.p); },
-  saveGameData: function(params) { return saveGameDataV2(params.u, params.p, params.data, params.log); },
-  getOrchardData: function(params) { return getOrchardDataV2(params.u, params.p); },
+  login: function(params) { return loginUserV3(params.u, params.p); },
+  saveGameData: function(params) { return saveGameDataV3(params.u, params.p, params.data, params.log); },
+  getOrchardData: function(params) { return getOrchardDataV3(params.u, params.p); },
   getOrchardSeasonStatus: function(params) { return getOrchardSeasonStatus(); },
   getOrchardSeason31Preview: function(params) { return getOrchardSeason31Preview(); },
-  getGlobalLogs: function(params) { return { list: getGlobalLogs() }; },
+  getGlobalLogs: function(params) { return getGlobalLogsV3(); },
   getPersonalLogs: function(params) { return { list: getPersonalLogs(params.u) }; },
   getCalendarData: function(params) { return getCalendarData(params.u, params.year, params.month); },
   getAdminReport: function(params) { return getAdminReport(params.filters, params.mode, params.dateVal); },
@@ -42,8 +45,13 @@ var ACTION_HANDLERS = {
   deleteCRM: function(params) { return deleteCRMV2(params.u, params.p, params.recordId); },
   addCRMNote: function(params) { return addCRMNoteV2(params.u, params.p, params.recordId, params.note); },
   deleteCRMNote: function(params) { return deleteCRMNoteV2(params.u, params.p, params.noteId); },
-  getYearlyEvents: function(params) { return getYearlyEventsV2(params.u, params.p); },
-  saveCalendarEvent: function(params) { return saveCalendarEventV2(params.u, params.p, params.item); },
+  getYearlyEvents: function(params) { return getYearlyEventsV3(params.u, params.p); },
+  saveCalendarEvent: function(params) { return saveCalendarEventV3(params.u, params.p, params.item); },
+  deleteCalendarEvent: function(params) { return deleteCalendarEventV3(params.u, params.p, params.id); },
+  searchCRMShareMembers: function(params) { return searchCRMShareMembersV3(params.u, params.p, params.q); },
+  searchUsersForRole: function(params) { return searchUsersForRoleV3(params.u, params.p, params.q); },
+  setUserRole: function(params) { return setUserRoleV3(params.u, params.p, params.target, params.role); },
+  addPublicShare: function(params) { return addPublicShareV3(params.u, params.p, params.data); },
   getShareData: function(params) { return getShareData(params.isAdmin); },
   manageShare: function(params) { return manageShare(params.subAction, params.data); },
   getClassicsMenu: function(params) { return getClassicsMenu(); },
@@ -87,7 +95,7 @@ function jsonResponse(payload) {
 
 function runWithScriptLock(callback) {
   var lock = LockService.getScriptLock();
-  if (!lock.tryLock(60000)) return { error: "System Busy" };
+  if (!lock.tryLock(20000)) return { error: "System Busy" };
   try {
     return callback();
   } finally {

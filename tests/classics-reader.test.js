@@ -30,3 +30,7 @@ test("escapes reader content before rendering", () => {
 test("reads the original Chinese text instead of a pinyin script", () => {
   assert.equal(helpers.buildSpeechText("學而時習之，不亦說乎？"), "學而時習之，不亦說乎？");
 });
+
+test("builds a stable favorite id from sheet and source row", () => {
+  assert.equal(helpers.classicFavoriteId("論語_學而", 7), "論語_學而::7");
+});

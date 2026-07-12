@@ -6,6 +6,7 @@ var CRM_BACKUP_SHEET_V2 = "CRM_共用升級前備份";
 var EVENT_CATEGORIES_V2 = ["北賢", "南賢"];
 
 function findCollaborationViewerV2(username, password) {
+  if (typeof findViewerV3 === "function") return findViewerV3(username, password);
   if (!username || !password) return null;
   var users = getSpreadsheet().getSheetByName("Users").getDataRange().getValues();
   for (var i = 1; i < users.length; i++) {
@@ -216,8 +217,6 @@ function getCRMV2(username, password, targetUsername) {
   }
 
   var spreadsheet = getSpreadsheet();
-  ensureCRMStorageV2(spreadsheet);
-  ensureCRMRecordIdsV2(spreadsheet);
   var crmSheet = spreadsheet.getSheetByName("CRM");
   var notesByRecord = readCRMNotesByRecordV2(spreadsheet);
   var reminders = target === viewer.username ? readCRMReminderMapV2(spreadsheet, target) : {};
@@ -276,14 +275,18 @@ function ensureCRMRecordIdsV2(spreadsheet) {
 }
 
 function getEligibleCRMShareMembersV2(viewer) {
-  var users = getSpreadsheet().getSheetByName("Users").getDataRange().getValues();
   var names = [];
+  if (typeof readUserDirectoryV3 === "function") {
+    readUserDirectoryV3().forEach(function(user) {
+      if (user.name !== viewer.username && (!viewer.minor || user.minor === viewer.minor)) names.push(user.name);
+    });
+    return names.sort(function(a, b) { return a.localeCompare(b, "zh-Hant"); });
+  }
+  var users = getSpreadsheet().getSheetByName("Users").getDataRange().getValues();
   for (var i = 1; i < users.length; i++) {
     var name = String(users[i][0] || "").trim();
     var minor = String(users[i][3] || "");
-    if (!name || name === viewer.username) continue;
-    if (viewer.minor && minor !== viewer.minor) continue;
-    names.push(name);
+    if (name && name !== viewer.username && (!viewer.minor || minor === viewer.minor)) names.push(name);
   }
   return names.sort(function(a, b) { return a.localeCompare(b, "zh-Hant"); });
 }
@@ -335,6 +338,7 @@ function saveCRMV2(username, password, item) {
 }
 
 function sanitizeCRMSharedUsersV2(value, viewer) {
+  if (typeof sanitizeCRMSharedUsersV3 === "function") return sanitizeCRMSharedUsersV3(value, viewer);
   var allowed = {};
   getEligibleCRMShareMembersV2(viewer).forEach(function(name) { allowed[name] = true; });
   return normalizeSharedUsersV2(value).filter(function(name) { return !!allowed[name]; });

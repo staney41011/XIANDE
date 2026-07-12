@@ -30,7 +30,11 @@
 
   var state = {
     chapterTitle: "",
+    subjectName: "",
+    sheetName: "",
     passages: [],
+    favoriteIds: {},
+    onFavoriteToggle: null,
     phoneticMode: readSetting("classics_phonetic_mode", "original"),
     allTranslationsOpen: false,
     voices: [],
@@ -42,7 +46,9 @@
     speechPosition: 0,
     speechLoop: false,
     speechMode: "",
-    currentSpeechIndex: -1
+    currentSpeechIndex: -1,
+    mediaUnlockAudio: null,
+    mediaUnlockUrl: ""
   };
 
   var TONELESS_PINYIN = {
@@ -255,12 +261,21 @@
   function renderChapter(reader, payload) {
     stopSpeech(false);
     state.chapterTitle = String(payload && payload.chapterTitle || "");
+    state.subjectName = String(payload && payload.subjectName || "");
+    state.sheetName = String(payload && payload.sheetName || "");
     state.passages = normalizePassages(payload && payload.passages);
+    state.favoriteIds = {};
+    (Array.isArray(payload && payload.favorites) ? payload.favorites : []).forEach(function(item) {
+      if (item && item.id) state.favoriteIds[String(item.id)] = true;
+    });
+    state.onFavoriteToggle = payload && typeof payload.onFavoriteToggle === "function" ? payload.onFavoriteToggle : null;
     state.allTranslationsOpen = false;
 
     var chapterSource = safeSourceUrl(payload && payload.sourceUrl, state.chapterTitle);
     var passagesHtml = state.passages.map(function(passage, index) {
       var sourceUrl = safeSourceUrl(passage.sourceUrl || chapterSource, state.chapterTitle);
+      var favoriteId = classicFavoriteId(state.sheetName, index + 2);
+      var isFavorite = !!state.favoriteIds[favoriteId];
       var translationHtml = passage.translation
         ? "<p>" + escapeHtml(passage.translation) + "</p>"
         : "<a href=\"" + escapeHtml(sourceUrl) + "\" target=\"_blank\" rel=\"noopener noreferrer\">查看現代漢語來源</a>";
@@ -269,6 +284,7 @@
         "<article class=\"classic-passage\" data-passage-index=\"", index, "\">",
         "<div class=\"classic-passage-tools\">",
         "<span class=\"classic-passage-number\">", index + 1, "</span>",
+        "<button type=\"button\" class=\"classic-icon-btn classic-favorite-btn", isFavorite ? " active" : "", "\" title=\"", isFavorite ? "移除自選章句" : "加入自選章句", "\" aria-label=\"", isFavorite ? "移除第 " : "收藏第 ", index + 1, " 句\" aria-pressed=\"", isFavorite ? "true" : "false", "\" onclick=\"ClassicsReader.toggleFavorite(", index, ")\">", isFavorite ? "★" : "☆", "</button>",
         "<button type=\"button\" class=\"classic-icon-btn\" title=\"朗讀本句\" aria-label=\"朗讀第 ", index + 1, " 句\" onclick=\"ClassicsReader.speakSentence(", index, ")\">🔊</button>",
         "<button type=\"button\" class=\"classic-translation-toggle\" aria-expanded=\"false\" onclick=\"ClassicsReader.toggleSentenceTranslation(", index, ")\">白話</button>",
         "</div>",
@@ -288,6 +304,38 @@
     updateAllTranslationsButton();
     prepareVoices();
     setSpeechStatus("");
+  }
+
+  function classicFavoriteId(sheetName, row) {
+    return String(sheetName || "") + "::" + String(row || "");
+  }
+
+  function toggleFavorite(index) {
+    var passage = state.passages[Number(index)];
+    if (!passage || !state.sheetName) return;
+    var row = Number(index) + 2;
+    var id = classicFavoriteId(state.sheetName, row);
+    var selected = !state.favoriteIds[id];
+    if (selected) state.favoriteIds[id] = true;
+    else delete state.favoriteIds[id];
+    var passageElement = getPassageElement(Number(index));
+    var button = passageElement ? passageElement.querySelector(".classic-favorite-btn") : null;
+    if (button) {
+      button.classList.toggle("active", selected);
+      button.textContent = selected ? "★" : "☆";
+      button.title = selected ? "移除自選章句" : "加入自選章句";
+      button.setAttribute("aria-pressed", selected ? "true" : "false");
+    }
+    if (state.onFavoriteToggle) {
+      state.onFavoriteToggle({
+        id: id,
+        subject: state.subjectName,
+        title: state.chapterTitle,
+        sheet: state.sheetName,
+        row: row,
+        text: passage.text
+      }, selected);
+    }
   }
 
   function setPhoneticMode(mode) {
@@ -357,6 +405,39 @@
 
   function supportsSpeech() {
     return !!(root && root.speechSynthesis && root.SpeechSynthesisUtterance);
+  }
+
+  function createSilentWavUrl() {
+    if (!root || !root.Blob || !root.URL || !root.URL.createObjectURL) return "";
+    var sampleRate = 8000;
+    var samples = 800;
+    var buffer = new ArrayBuffer(44 + samples * 2);
+    var view = new DataView(buffer);
+    function writeText(offset, text) {
+      for (var i = 0; i < text.length; i++) view.setUint8(offset + i, text.charCodeAt(i));
+    }
+    writeText(0, "RIFF"); view.setUint32(4, 36 + samples * 2, true); writeText(8, "WAVE");
+    writeText(12, "fmt "); view.setUint32(16, 16, true); view.setUint16(20, 1, true);
+    view.setUint16(22, 1, true); view.setUint32(24, sampleRate, true); view.setUint32(28, sampleRate * 2, true);
+    view.setUint16(32, 2, true); view.setUint16(34, 16, true); writeText(36, "data"); view.setUint32(40, samples * 2, true);
+    return root.URL.createObjectURL(new root.Blob([buffer], { type: "audio/wav" }));
+  }
+
+  function unlockIOSAudio() {
+    try {
+      if (root.navigator && root.navigator.audioSession) root.navigator.audioSession.type = "playback";
+    } catch (error) {}
+    if (!root || !root.Audio) return;
+    if (!state.mediaUnlockAudio) {
+      state.mediaUnlockUrl = createSilentWavUrl();
+      if (!state.mediaUnlockUrl) return;
+      state.mediaUnlockAudio = new root.Audio(state.mediaUnlockUrl);
+      state.mediaUnlockAudio.loop = true;
+      state.mediaUnlockAudio.preload = "auto";
+      state.mediaUnlockAudio.setAttribute("playsinline", "");
+    }
+    var playResult = state.mediaUnlockAudio.play();
+    if (playResult && typeof playResult.catch === "function") playResult.catch(function() {});
   }
 
   function voiceScore(voice) {
@@ -480,6 +561,7 @@
     state.speechMode = "";
     state.currentSpeechIndex = -1;
     if (supportsSpeech()) root.speechSynthesis.cancel();
+    if (state.mediaUnlockAudio && typeof state.mediaUnlockAudio.pause === "function") state.mediaUnlockAudio.pause();
     clearSpeechHighlight();
     setSpeechStatus(showStatus === false ? "" : "已停止");
     updateSpeechButtons();
@@ -503,7 +585,8 @@
     state.speechMode = mode;
     var token = state.speechToken;
     updateSpeechButtons();
-    setTimeout(function() { speakNext(token); }, 80);
+    unlockIOSAudio();
+    speakNext(token);
   }
 
   function speakNext(token) {
@@ -529,6 +612,7 @@
     utterance.lang = voice && voice.lang ? voice.lang : "zh-TW";
     utterance.rate = 0.9;
     utterance.pitch = 1;
+    utterance.volume = 1;
 
     utterance.onstart = function() {
       if (token !== state.speechToken) return;
@@ -574,6 +658,7 @@
 
   return {
     renderChapter: renderChapter,
+    toggleFavorite: toggleFavorite,
     setPhoneticMode: setPhoneticMode,
     toggleSentenceTranslation: toggleSentenceTranslation,
     toggleAllTranslations: toggleAllTranslations,
@@ -591,7 +676,8 @@
       pinyinToZhuyin: pinyinToZhuyin,
       safeSourceUrl: safeSourceUrl,
       buildSpeechTextFromItems: buildSpeechTextFromItems,
-      buildSpeechText: buildSpeechText
+      buildSpeechText: buildSpeechText,
+      classicFavoriteId: classicFavoriteId
     }
   };
 });
