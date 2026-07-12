@@ -1,5 +1,5 @@
 // sw.js
-var CACHE_NAME = 'xd-app-v3';
+var CACHE_NAME = 'xd-app-v4';
 var urlsToCache = [
   './',
   'index.html',
@@ -34,11 +34,18 @@ self.addEventListener('activate', function(event) {
 });
 
 self.addEventListener('fetch', function(event) {
+  if (event.request.method !== 'GET') return;
   event.respondWith(
-    caches.match(event.request)
+    fetch(event.request)
       .then(function(response) {
-        if (response) { return response; }
-        return fetch(event.request);
+        if (response && response.ok && new URL(event.request.url).origin === self.location.origin) {
+          var copy = response.clone();
+          caches.open(CACHE_NAME).then(function(cache) { cache.put(event.request, copy); });
+        }
+        return response;
+      })
+      .catch(function() {
+        return caches.match(event.request);
       })
   );
 });
