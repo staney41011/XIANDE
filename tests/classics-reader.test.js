@@ -27,23 +27,6 @@ test("escapes reader content before rendering", () => {
   assert.equal(helpers.escapeHtml('<script>"x"</script>'), "&lt;script&gt;&quot;x&quot;&lt;/script&gt;");
 });
 
-test("builds the spoken script from contextual pinyin instead of raw Han characters", () => {
-  const items = [
-    { origin: "學", isZh: true, pinyin: "xué" },
-    { origin: "而", isZh: true, pinyin: "ér" },
-    { origin: "時", isZh: true, pinyin: "shí" },
-    { origin: "習", isZh: true, pinyin: "xí" },
-    { origin: "之", isZh: true, pinyin: "zhī" },
-    { origin: "，", isZh: false },
-    { origin: "不", isZh: true, pinyin: "bú" },
-    { origin: "亦", isZh: true, pinyin: "yì" },
-    { origin: "說", isZh: true, pinyin: "yuè" },
-    { origin: "乎", isZh: true, pinyin: "hū" },
-    { origin: "？", isZh: false }
-  ];
-
-  assert.equal(
-    helpers.buildSpeechTextFromItems(items),
-    "xué ér shí xí zhī， bú yì yuè hū？"
-  );
+test("reads the original Chinese text instead of a pinyin script", () => {
+  assert.equal(helpers.buildSpeechText("學而時習之，不亦說乎？"), "學而時習之，不亦說乎？");
 });

@@ -15,7 +15,10 @@ var WRITE_ACTIONS = {
   saveCRM: true,
   deleteCRM: true,
   manageShare: true,
-  batchCrawl: true
+  batchCrawl: true,
+  saveCalendarEvent: true,
+  addCRMNote: true,
+  deleteCRMNote: true
 };
 
 var ACTION_HANDLERS = {
@@ -34,10 +37,13 @@ var ACTION_HANDLERS = {
   getLatestLog: function(params) { return getLatestLog(); },
   broadcast: function(params) { return sendBroadcast(params.msg, params.time); },
   updateMarquee: function(params) { return updateMarquee(params.msg); },
-  getCRM: function(params) { return getCRM(params.u, params.target); },
-  saveCRM: function(params) { return saveCRM(params.u, params.item); },
-  deleteCRM: function(params) { return deleteCRM(params.u, params.idx); },
-  getYearlyEvents: function(params) { return getYearlyEvents(); },
+  getCRM: function(params) { return getCRMV2(params.u, params.p, params.target); },
+  saveCRM: function(params) { return saveCRMV2(params.u, params.p, params.item); },
+  deleteCRM: function(params) { return deleteCRMV2(params.u, params.p, params.recordId); },
+  addCRMNote: function(params) { return addCRMNoteV2(params.u, params.p, params.recordId, params.note); },
+  deleteCRMNote: function(params) { return deleteCRMNoteV2(params.u, params.p, params.noteId); },
+  getYearlyEvents: function(params) { return getYearlyEventsV2(params.u, params.p); },
+  saveCalendarEvent: function(params) { return saveCalendarEventV2(params.u, params.p, params.item); },
   getShareData: function(params) { return getShareData(params.isAdmin); },
   manageShare: function(params) { return manageShare(params.subAction, params.data); },
   getClassicsMenu: function(params) { return getClassicsMenu(); },

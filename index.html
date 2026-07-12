@@ -163,6 +163,29 @@
           <div class="today-dashboard" id="today-dash">📊 今日已累積：開口 0 | 渡眾 0 | 入班 0</div>
           <button class="btn btn-success" onclick="saveAchievements()">✅ 確認紀錄</button>
         </div>
+
+        <div class="card season-goal-card">
+          <h3>賢德班第32期立愿目標</h3>
+          <div class="season-goal-row">
+            <div class="season-goal-heading"><span>🗣️ 開口</span><strong id="goal-spoke-label">0 / 0</strong></div>
+            <div class="season-goal-track"><span id="goal-spoke-progress"></span></div>
+            <label for="goal-spoke">立愿數量</label>
+            <input id="goal-spoke" type="number" min="0" step="1" class="input-field" value="0" oninput="renderSeason32Goals(false)">
+          </div>
+          <div class="season-goal-row">
+            <div class="season-goal-heading"><span>🤝 渡眾</span><strong id="goal-convert-label">0 / 0</strong></div>
+            <div class="season-goal-track"><span id="goal-convert-progress"></span></div>
+            <label for="goal-convert">立愿數量</label>
+            <input id="goal-convert" type="number" min="0" step="1" class="input-field" value="0" oninput="renderSeason32Goals(false)">
+          </div>
+          <div class="season-goal-row">
+            <div class="season-goal-heading"><span>🏫 入班</span><strong id="goal-class-label">0 / 0</strong></div>
+            <div class="season-goal-track"><span id="goal-class-progress"></span></div>
+            <label for="goal-class">立愿數量</label>
+            <input id="goal-class" type="number" min="0" step="1" class="input-field" value="0" oninput="renderSeason32Goals(false)">
+          </div>
+          <button class="btn btn-primary" onclick="saveSeason32Goals()">儲存立愿目標</button>
+        </div>
       </div>
 
       <div id="v-orchard" class="view-section" style="text-align:center;">
@@ -195,6 +218,9 @@
 
       <div id="v-events" class="view-section">
          <div style="padding: 0 10px;">
+            <div class="event-manage-bar">
+               <button id="event-add-btn" type="button" class="btn btn-primary" onclick="editEvent(null)" hidden>＋ 新增活動</button>
+            </div>
             <div class="sticky-filters">
                <div id="event-filters" class="scroll-x"></div>
             </div>

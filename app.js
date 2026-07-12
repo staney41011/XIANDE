@@ -24,6 +24,7 @@ let classicsSearchRequestId = 0;
 
 var gUser=null, gPass=null, gData={}, menuConfig={}, crmData=[];
 var allEvents = [], activeFilters = [], shareDataList = [];
+var eventCategories = [], eventCanManage = false, crmMemberOptions = [];
 var cmsUploadFiles = []; 
 var timerInt=null, isTimer=false;
 var curYear = new Date().getFullYear(), curMonth = new Date().getMonth() + 1;
@@ -701,29 +702,135 @@ function manageShare(action, data) {
 // ... Other Features ...
 function loadEvents() {
    document.getElementById('event-list').innerHTML = '<div style="text-align:center; padding:20px; color:#ccc;">載入中...</div>';
-   callApi('getYearlyEvents').then(res => {
+   return callApi('getYearlyEvents', {u:gUser, p:gPass}).then(res => {
       if(res.error) { document.getElementById('event-list').innerHTML = `<div style="text-align:center; color:#f44336;">${res.error}</div>`; return; }
       allEvents = res.list || [];
-      var cats = res.cats || [];
+      eventCategories = res.cats || [];
+      eventCanManage = !!res.canManage;
+      document.getElementById('event-add-btn').hidden = !eventCanManage;
       initFilters();
       var filterHtml = `<div class="chip ${activeFilters.length===0?'active':''}" onclick="toggleFilter('all', this)">全部</div>`;
-      cats.forEach(c => { var isActive = activeFilters.includes(c) ? 'active' : ''; filterHtml += `<div class="chip ${isActive}" onclick="toggleFilter('${c}', this)">${c}</div>`; });
+      eventCategories.forEach(c => { var isActive = activeFilters.includes(c) ? 'active' : ''; filterHtml += `<div class="chip ${isActive}" onclick="toggleFilterFromPayload('${escapeAttr(encodePayload(c))}', this)">${escapeHtml(c)}</div>`; });
       document.getElementById('event-filters').innerHTML = filterHtml;
       renderEventList();
    });
 }
-function initFilters() { if(gData.teamMajor === "主領班") { activeFilters = []; } else { activeFilters = ["中央", "賢德", "仙佛紀念日"]; if(gData.teamMajor && gData.teamMajor.includes("賢")) { activeFilters.push(gData.teamMajor); } } }
+function initFilters() { if(gData.teamMajor === "主領班" || String(gUser).toUpperCase() === "ADMIN") { activeFilters = []; } else { activeFilters = ["中央", "賢德", "仙佛紀念日"]; if(gData.teamMajor && gData.teamMajor.includes("賢")) { activeFilters.push(gData.teamMajor); } } }
+function toggleFilterFromPayload(payload, element) { toggleFilter(decodePayload(payload), element); }
 function toggleFilter(cat, el) { if(cat === 'all') { activeFilters = []; var chips = document.querySelectorAll('.chip'); chips.forEach(c => c.classList.remove('active')); el.classList.add('active'); } else { document.querySelector('.chip:first-child').classList.remove('active'); if(activeFilters.includes(cat)) { activeFilters = activeFilters.filter(c => c !== cat); el.classList.remove('active'); } else { activeFilters.push(cat); el.classList.add('active'); } } renderEventList(); }
-function renderEventList() { var today = new Date(); today.setHours(0,0,0,0); var html = ""; var hasScrolled = false; var historyAdded = false; var weekDays = ["日", "一", "二", "三", "四", "五", "六"]; allEvents.forEach((e, index) => { if(activeFilters.length > 0 && !activeFilters.includes(e.cat)) return; var dStart = new Date(e.date); var dEnd = new Date(e.end); var isPast = dEnd < today; var isTodayOrFuture = dEnd >= today; if(!historyAdded && isTodayOrFuture && index > 0) { html += `<div class="history-line">以上是歷史活動</div>`; historyAdded = true; } var day = dStart.getDate(); var mon = dStart.getMonth() + 1; var weekStr = weekDays[dStart.getDay()]; var dateRangeStr = ""; if(e.date !== e.end) { var dEndDay = dEnd.getDate(); var dEndMon = dEnd.getMonth() + 1; dateRangeStr = `📅 ${mon}/${day} ~ ${dEndMon}/${dEndDay}`; day = `${day}-${dEndDay}`; var diffTime = dStart - today; var diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); if(diffDays > 0) dateRangeStr += ` (還有${diffDays}天)`; else if(diffDays <= 0 && dEnd >= today) dateRangeStr += ` (進行中)`; } else { var diffTime = dStart - today; var diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); if(diffDays === 0) dateRangeStr = "<span style='color:red; font-weight:bold;'>今天!</span>"; else if(diffDays > 0) dateRangeStr = `還有 ${diffDays} 天`; else dateRangeStr = "已結束"; } var cardId = ""; if(!hasScrolled && isTodayOrFuture) { cardId = "id='today-focus'"; hasScrolled = true; } var noteHtml = e.note ? `<div class="event-note">${escapeHtml(e.note)}</div>` : ""; html += `<div ${cardId} class="event-card ${isPast?'past':''} ${cardId?'focus':''}"><div class="event-date-box" style="border-left: 5px solid ${getTagColor(e.cat)}"><div class="event-month">${mon}月</div><div class="event-day" style="font-size:${day.toString().length>2?'14px':'18px'}">${day}</div><div style="font-size:10px; margin-top:-2px;">週${weekStr}</div></div><div class="event-info"><div class="event-title">${escapeHtml(e.name)}</div>${noteHtml}<div class="event-meta"><span class="tag" style="background:${getTagColor(e.cat)}">${escapeHtml(e.cat)}</span><span>📍 ${escapeHtml(e.loc || "--")}</span><span style="flex:1; text-align:right; font-size:10px; color:#999;">${dateRangeStr}</span></div></div></div>`; }); document.getElementById('event-list').innerHTML = html || "<div style='text-align:center; color:#999; padding:20px;'>沒有活動</div>"; setTimeout(() => { var focusEl = document.getElementById('today-focus'); if(focusEl) focusEl.scrollIntoView({behavior: "smooth", block: "center"}); }, 300); }
+function renderEventList() {
+   var today = new Date(); today.setHours(0,0,0,0);
+   var html = "", hasScrolled = false, historyAdded = false, hasPastRendered = false;
+   var weekDays = ["日", "一", "二", "三", "四", "五", "六"];
+   allEvents.forEach(function(eventItem) {
+      if(activeFilters.length > 0 && !activeFilters.includes(eventItem.cat)) return;
+      var start = new Date(eventItem.date), end = new Date(eventItem.end);
+      var isPast = end < today, isTodayOrFuture = end >= today;
+      if(!historyAdded && isTodayOrFuture && hasPastRendered) { html += '<div class="history-line">以上是歷史活動</div>'; historyAdded = true; }
+      var day = start.getDate(), month = start.getMonth() + 1, week = weekDays[start.getDay()];
+      var difference = Math.ceil((start - today) / 86400000), dateText = '';
+      if(eventItem.date !== eventItem.end) {
+         var endDay = end.getDate(), endMonth = end.getMonth() + 1;
+         dateText = `📅 ${month}/${day} ~ ${endMonth}/${endDay}`;
+         day = `${day}-${endDay}`;
+         if(difference > 0) dateText += ` (還有${difference}天)`;
+         else if(end >= today) dateText += ' (進行中)';
+      } else if(difference === 0) dateText = '<span style="color:red; font-weight:bold;">今天!</span>';
+      else if(difference > 0) dateText = `還有 ${difference} 天`;
+      else dateText = '已結束';
+      var focusId = '';
+      if(!hasScrolled && isTodayOrFuture) { focusId = ' id="today-focus"'; hasScrolled = true; }
+      if(isPast) hasPastRendered = true;
+      var editButton = eventCanManage ? `<button type="button" class="event-edit-btn" title="編輯活動" aria-label="編輯活動" onclick="editEventFromPayload('${escapeAttr(encodePayload(eventItem))}')">✎</button>` : '';
+      html += `<div${focusId} class="event-card ${isPast?'past':''} ${focusId?'focus':''}"><div class="event-date-box" style="border-left:5px solid ${getTagColor(eventItem.cat)}"><div class="event-month">${month}月</div><div class="event-day" style="font-size:${day.toString().length>2?'14px':'18px'}">${day}</div><div style="font-size:10px; margin-top:-2px;">週${week}</div></div><div class="event-info"><div class="event-title">${escapeHtml(eventItem.name)}</div>${eventItem.note?`<div class="event-note">${escapeHtml(eventItem.note)}</div>`:''}<div class="event-meta"><span class="tag" style="background:${getTagColor(eventItem.cat)}">${escapeHtml(eventItem.cat)}</span><span>📍 ${escapeHtml(eventItem.loc||'--')}</span><span style="flex:1; text-align:right; font-size:10px; color:#999;">${dateText}</span>${editButton}</div></div></div>`;
+   });
+   document.getElementById('event-list').innerHTML = html || '<div style="text-align:center; color:#999; padding:20px;">沒有活動</div>';
+   setTimeout(function(){ var focus=document.getElementById('today-focus'); if(focus) focus.scrollIntoView({behavior:'smooth',block:'center'}); },300);
+}
 function getTagColor(cat) { if(!cat) return "#ccc"; if(cat.includes("仙佛")) return "#fbc02d"; if(cat.includes("賢德")) return "#8bc34a"; if(cat.includes("中央")) return "#ff7043"; if(cat.includes("中") || cat.includes("北") || cat.includes("南")) return "#29b6f6"; return "#9e9e9e"; }
 
-function loadCRM(targetUser) { var u = targetUser || gUser; if(!targetUser) document.getElementById('crm-list').innerHTML = '<div style="text-align:center; color:#999;">載入中...</div>'; callApi('getCRM', {u:gUser, target:u}).then(res => { if(res.error) { alert(res.error); return; } var list = res.list || []; if(targetUser) { var html = `<h4>👤 ${escapeHtml(targetUser)} 的記事本</h4>`; if(list.length === 0) html += "<p>尚無資料</p>"; list.forEach(item => { var stClass = "s-plan"; if(item.status.includes("開口")) stClass = "s-spoke"; if(item.status.includes("入班") || item.status.includes("求道")) stClass = "s-join"; var rInfo = item.remind ? `<br><small>⏰ ${item.remind} (${item.repeat})</small>` : ""; html += `<div class="crm-card" style="pointer-events:none; background:#f9f9f9;"><div class="crm-header"><div class="crm-name">${escapeHtml(item.name)}</div><div class="crm-status ${stClass}">${escapeHtml(item.status)}</div></div><div class="crm-note">${item.todo ? "📝 待辦: " + item.todo : (item.note || "無備註")}${rInfo}</div></div>`; }); document.getElementById('modal-content').innerHTML = html; } else { crmData = list; renderCRM(); } }); }
-function renderCRM() { var todoHtml = "", listHtml = ""; crmData.forEach(item => { if(item.todo) { todoHtml += `<div class="todo-item"><input type="checkbox" class="todo-check" onclick="completeTodo(${item.id})"><div class="todo-text"><div style="font-weight:bold;">${escapeHtml(item.name)}</div><div>${escapeHtml(item.todo)}</div></div></div>`; } var stClass = "s-plan"; if(item.status.includes("開口")) stClass = "s-spoke"; if(item.status.includes("入班") || item.status.includes("求道")) stClass = "s-join"; var rIcon = item.remind ? "⏰" : ""; listHtml += `<div class="crm-card" onclick="editCRMFromPayload('${encodePayload(item)}')"><div class="crm-header"><div class="crm-name">${escapeHtml(item.name)} ${rIcon}</div><div class="crm-status ${stClass}">${escapeHtml(item.status)}</div></div><div class="crm-note">${item.todo ? "📝 " + item.todo : (item.note || "無備註")}</div></div>`; }); document.getElementById('crm-todo-list').innerHTML = todoHtml || '<div style="text-align:center; color:#999; font-size:12px;">無待辦事項</div>'; document.getElementById('crm-list').innerHTML = listHtml || '<div style="text-align:center; color:#999; margin-top:20px;">點擊右下角 + 新增名單</div>'; }
+function editEventFromPayload(payload) { editEvent(decodePayload(payload)); }
+function editEvent(item) {
+   if(!eventCanManage) return;
+   item = item || {id:0,name:'',date:'',end:'',cat:'北賢',loc:'',note:''};
+   var categories = eventCategories.slice();
+   if(item.cat && !categories.includes(item.cat)) categories.push(item.cat);
+   var options = categories.map(function(category){ return `<option value="${escapeAttr(category)}" ${category===item.cat?'selected':''}>${escapeHtml(category)}</option>`; }).join('');
+   document.getElementById('modal-title').innerText = item.id ? '編輯活動' : '新增活動';
+   document.getElementById('modal-content').innerHTML = `<input id="event-id" type="hidden" value="${escapeAttr(item.id||0)}"><label>活動名稱</label><input id="event-name" class="input-field" value="${escapeAttr(item.name)}"><label>開始日期</label><input id="event-date" type="date" class="input-field" value="${escapeAttr(item.date)}"><label>結束日期</label><input id="event-end" type="date" class="input-field" value="${escapeAttr(item.end||item.date)}"><label>分類</label><select id="event-cat" class="input-field">${options}</select><label>地點</label><input id="event-loc" class="input-field" value="${escapeAttr(item.loc)}"><label>備註</label><textarea id="event-note" class="input-field" rows="3">${escapeHtml(item.note)}</textarea><button class="btn btn-primary" onclick="saveEventItem()">儲存活動</button>`;
+   document.getElementById('modal-overlay').style.display = 'flex';
+}
+function saveEventItem() {
+   var item = {id:document.getElementById('event-id').value,name:document.getElementById('event-name').value,date:document.getElementById('event-date').value,end:document.getElementById('event-end').value,cat:document.getElementById('event-cat').value,loc:document.getElementById('event-loc').value,note:document.getElementById('event-note').value};
+   loading(true);
+   callApi('saveCalendarEvent',{u:gUser,p:gPass,item:item}).then(function(res){ loading(false); if(!res.success){ alert(res.error||'儲存失敗'); return; } closeModal(); loadEvents(); });
+}
+
+function crmStatusClass(status) { if(String(status).includes('開口')) return 's-spoke'; if(String(status).includes('入班')||String(status).includes('求道')) return 's-join'; return 's-plan'; }
+function loadCRM(targetUser) {
+   var target = targetUser || gUser;
+   if(!targetUser) document.getElementById('crm-list').innerHTML = '<div style="text-align:center; color:#999;">載入中...</div>';
+   return callApi('getCRM',{u:gUser,p:gPass,target:target}).then(function(res){
+      if(res.error){ alert(res.error); return; }
+      var list=res.list||[];
+      if(targetUser){
+         var html=`<h4>👤 ${escapeHtml(targetUser)} 的記事本</h4>`;
+         if(!list.length) html+='<p>尚無資料</p>';
+         list.forEach(function(item){ var notes=(item.notes||[]).map(function(note){ return `<div class="crm-note-log"><div class="crm-note-meta"><span>${escapeHtml(note.author)} · ${escapeHtml(note.time)}</span></div><div class="crm-note-text">${escapeHtml(note.text)}</div></div>`; }).join(''); html+=`<div class="crm-card" style="cursor:default; background:#f9f9f9;"><div class="crm-header"><div class="crm-name">${escapeHtml(item.name)}</div><div class="crm-status ${crmStatusClass(item.status)}">${escapeHtml(item.status)}</div></div><div class="crm-note">${item.todo?'📝 '+escapeHtml(item.todo):'無待辦'}</div><div class="crm-owner">建立者：${escapeHtml(item.owner)}</div>${notes}</div>`; });
+         document.getElementById('modal-content').innerHTML=html;
+      } else {
+         crmData=list; crmMemberOptions=res.members||[]; renderCRM();
+      }
+   });
+}
+function renderCRM() {
+   var todoHtml='', listHtml='';
+   crmData.forEach(function(item){
+      if(item.todo) todoHtml+=`<div class="todo-item"><input type="checkbox" class="todo-check" onclick="completeTodoFromPayload('${escapeAttr(encodePayload(item.recordId))}')"><div class="todo-text"><div style="font-weight:bold;">${escapeHtml(item.name)}</div><div>${escapeHtml(item.todo)}</div></div></div>`;
+      var notes=item.notes||[], latest=notes.length?notes[notes.length-1]:null;
+      var summary=item.todo?'📝 '+escapeHtml(item.todo):(latest?escapeHtml(latest.text):'尚無備註');
+      var sharedCount=(item.sharedWith||[]).length;
+      listHtml+=`<div class="crm-card" onclick="editCRMFromPayload('${escapeAttr(encodePayload(item))}')"><div class="crm-header"><div class="crm-name">${escapeHtml(item.name)} ${item.remind?'⏰':''} ${sharedCount?'👥':''}</div><div class="crm-status ${crmStatusClass(item.status)}">${escapeHtml(item.status)}</div></div><div class="crm-note">${summary}</div><div class="crm-owner">建立者：${escapeHtml(item.owner)}${sharedCount?' · 共同成全 '+sharedCount+' 人':''}</div></div>`;
+   });
+   document.getElementById('crm-todo-list').innerHTML=todoHtml||'<div style="text-align:center; color:#999; font-size:12px;">無待辦事項</div>';
+   document.getElementById('crm-list').innerHTML=listHtml||'<div style="text-align:center; color:#999; margin-top:20px;">點擊右下角 + 新增名單</div>';
+}
 function editCRMFromPayload(payload) { editCRM(decodePayload(payload)); }
-function editCRM(item) { var title = item ? "編輯資料" : "新增名單"; var isNew = !item; item = item || { id:0, name:"", status:"預計渡眾", todo:"", note:"", remind:"", repeat:"none" }; var html = `<input id="e-id" type="hidden" value="${escapeAttr(item.id)}"><div style="margin-bottom:10px;"><label>姓名</label><input id="e-name" class="input-field" value="${escapeAttr(item.name)}" placeholder="對象姓名"></div><div style="margin-bottom:10px;"><label>狀態</label><select id="e-status" class="input-field"><option ${item.status=='預計渡眾'?'selected':''}>預計渡眾</option><option ${item.status=='已開口'?'selected':''}>已開口</option><option ${item.status=='跟進中'?'selected':''}>跟進中</option><option ${item.status=='已求道'?'selected':''}>已求道</option><option ${item.status=='已入班'?'selected':''}>已入班</option></select></div><div style="margin-bottom:10px;"><label>下一步 / 待辦</label><input id="e-todo" class="input-field" value="${escapeAttr(item.todo)}" placeholder="例如：約吃飯、送書"></div><div style="margin-bottom:10px; background:#f0f4c3; padding:10px; border-radius:10px;"><label>⏰ 設定提醒 (選填)</label><input id="e-remind" type="datetime-local" class="input-field" value="${escapeAttr(item.remind)}"><label>重複頻率</label><select id="e-repeat" class="input-field"><option value="none" ${item.repeat=='none'?'selected':''}>單次提醒</option><option value="daily" ${item.repeat=='daily'?'selected':''}>每天</option><option value="weekly" ${item.repeat=='weekly'?'selected':''}>每週</option><option value="monthly" ${item.repeat=='monthly'?'selected':''}>每月</option></select></div><div style="margin-bottom:15px;"><label>備註</label><textarea id="e-note" class="input-field" rows="3">${escapeHtml(item.note)}</textarea></div><button class="btn btn-primary" onclick="saveCRMItem()">💾 儲存</button>${!isNew ? `<button class="btn" style="background:#eee; color:#f44336; margin-top:10px;" onclick="deleteCRMItem(${item.id})">🗑️ 刪除</button>` : ''}`; document.getElementById('modal-title').innerText = title; document.getElementById('modal-content').innerHTML = html; document.getElementById('modal-overlay').style.display = 'flex'; }
-function saveCRMItem() { var item = { id: document.getElementById('e-id').value, name: document.getElementById('e-name').value, status: document.getElementById('e-status').value, todo: document.getElementById('e-todo').value, note: document.getElementById('e-note').value, remind: document.getElementById('e-remind').value, repeat: document.getElementById('e-repeat').value }; if(!item.name) { alert("請輸入姓名"); return; } loading(true); callApi('saveCRM', {u:gUser, item:item}).then(res => { loading(false); closeModal(); loadCRM(); }); }
-function deleteCRMItem(id) { if(!confirm("確定要刪除此筆資料嗎？")) return; loading(true); callApi('deleteCRM', {u:gUser, idx:id}).then(res => { loading(false); closeModal(); loadCRM(); }); }
-function completeTodo(id) { if(!confirm("完成此待辦事項？")) return; var item = crmData.find(x => x.id == id); if(item) { item.todo = ""; loading(true); callApi('saveCRM', {u:gUser, item:item}).then(res => { loading(false); loadCRM(); }); } }
+function renderCRMShareSection(item,isNew) {
+   if(!isNew&&!item.isOwner) return `<div class="crm-share-section"><strong>共同成全</strong><div class="crm-owner">${[item.owner].concat(item.sharedWith||[]).map(escapeHtml).join('、')}</div></div>`;
+   var selected=item.sharedWith||[];
+   var options=crmMemberOptions.map(function(name){ return `<label class="crm-share-option"><input type="checkbox" data-crm-member value="${escapeAttr(name)}" ${selected.includes(name)?'checked':''}><span>${escapeHtml(name)}</span></label>`; }).join('');
+   return `<div class="crm-share-section"><label class="crm-share-option"><input id="crm-share-all" type="checkbox" onchange="toggleAllCRMShareMembers(this.checked)"><span><strong>選擇公堂全部成員</strong></span></label><div class="crm-share-list">${options||'<span class="crm-owner">目前沒有可選成員</span>'}</div></div>`;
+}
+function renderCRMNoteLogs(item) {
+   var notes=item.notes||[];
+   if(!notes.length) return '<div class="crm-owner">尚無備註</div>';
+   return notes.map(function(note){ return `<div class="crm-note-log"><div class="crm-note-meta"><span>${escapeHtml(note.author)} · ${escapeHtml(note.time)}</span><button type="button" class="crm-note-delete" title="刪除備註" aria-label="刪除備註" onclick="deleteCRMNoteFromPayload('${escapeAttr(encodePayload({noteId:note.id,recordId:item.recordId}))}')">×</button></div><div class="crm-note-text">${escapeHtml(note.text)}</div></div>`; }).join('');
+}
+function editCRM(item) {
+   var isNew=!item;
+   item=item||{recordId:'',name:'',status:'預計渡眾',todo:'',remind:'',repeat:'none',sharedWith:[],notes:[],isOwner:true,canDelete:true};
+   var notesSection=isNew?'<label>第一則備註（選填）</label><textarea id="e-new-note" class="input-field" rows="3"></textarea>':`<div class="crm-share-section"><strong>備註紀錄</strong>${renderCRMNoteLogs(item)}<label style="display:block; margin-top:12px;">新增備註</label><textarea id="e-new-note" class="input-field" rows="3" placeholder="輸入新的跟進紀錄"></textarea><button type="button" class="btn btn-success" onclick="addCRMNoteFromEditor()">新增備註</button></div>`;
+   var html=`<input id="e-record-id" type="hidden" value="${escapeAttr(item.recordId)}"><input id="e-is-new" type="hidden" value="${isNew?'1':'0'}"><label>姓名</label><input id="e-name" class="input-field" value="${escapeAttr(item.name)}" placeholder="對象姓名"><label>狀態</label><select id="e-status" class="input-field"><option ${item.status==='預計渡眾'?'selected':''}>預計渡眾</option><option ${item.status==='已開口'?'selected':''}>已開口</option><option ${item.status==='跟進中'?'selected':''}>跟進中</option><option ${item.status==='已求道'?'selected':''}>已求道</option><option ${item.status==='已入班'?'selected':''}>已入班</option></select><label>下一步 / 待辦</label><input id="e-todo" class="input-field" value="${escapeAttr(item.todo)}" placeholder="例如：約吃飯、送書">${renderCRMShareSection(item,isNew)}<div style="margin-bottom:12px; padding:10px; background:#f3f6e3; border-radius:6px;"><label>⏰ 我的提醒</label><input id="e-remind" type="datetime-local" class="input-field" value="${escapeAttr(item.remind)}"><label>重複頻率</label><select id="e-repeat" class="input-field"><option value="none" ${item.repeat==='none'?'selected':''}>單次提醒</option><option value="daily" ${item.repeat==='daily'?'selected':''}>每天</option><option value="weekly" ${item.repeat==='weekly'?'selected':''}>每週</option><option value="monthly" ${item.repeat==='monthly'?'selected':''}>每月</option></select></div>${notesSection}<button class="btn btn-primary" onclick="saveCRMItem()">儲存名單資料</button>${!isNew&&item.canDelete?`<button class="btn" style="background:#eee; color:#c62828; margin-top:10px;" onclick="deleteCRMItemFromPayload('${escapeAttr(encodePayload(item.recordId))}')">刪除整份名單</button>`:''}`;
+   document.getElementById('modal-title').innerText=isNew?'新增名單':'共同成全名單';
+   document.getElementById('modal-content').innerHTML=html;
+   document.getElementById('modal-overlay').style.display='flex';
+}
+function toggleAllCRMShareMembers(checked){ document.querySelectorAll('[data-crm-member]').forEach(function(input){ input.checked=checked; }); }
+function selectedCRMShareMembers(){ return Array.from(document.querySelectorAll('[data-crm-member]:checked')).map(function(input){ return input.value; }); }
+function saveCRMItem() {
+   var isNew=document.getElementById('e-is-new').value==='1';
+   var item={recordId:document.getElementById('e-record-id').value,name:document.getElementById('e-name').value,status:document.getElementById('e-status').value,todo:document.getElementById('e-todo').value,remind:document.getElementById('e-remind').value,repeat:document.getElementById('e-repeat').value,sharedWith:selectedCRMShareMembers(),initialNote:isNew?document.getElementById('e-new-note').value:''};
+   if(!item.name){ alert('請輸入姓名'); return; }
+   loading(true); callApi('saveCRM',{u:gUser,p:gPass,item:item}).then(function(res){ loading(false); if(!res.success){ alert(res.error||'儲存失敗'); return; } closeModal(); loadCRM(); });
+}
+function addCRMNoteFromEditor(){ var recordId=document.getElementById('e-record-id').value, text=document.getElementById('e-new-note').value.trim(); if(!text){ alert('請輸入備註'); return; } loading(true); callApi('addCRMNote',{u:gUser,p:gPass,recordId:recordId,note:text}).then(function(res){ loading(false); if(!res.success){ alert(res.error||'新增失敗'); return; } refreshCRMEditor(recordId); }); }
+function deleteCRMNoteFromPayload(payload){ var data=decodePayload(payload); if(!confirm('確定刪除這則備註？')) return; loading(true); callApi('deleteCRMNote',{u:gUser,p:gPass,noteId:data.noteId}).then(function(res){ loading(false); if(!res.success){ alert(res.error||'刪除失敗'); return; } refreshCRMEditor(data.recordId); }); }
+function refreshCRMEditor(recordId){ loadCRM().then(function(){ var item=crmData.find(function(entry){ return entry.recordId===recordId; }); if(item) editCRM(item); }); }
+function deleteCRMItemFromPayload(payload){ deleteCRMItem(decodePayload(payload)); }
+function deleteCRMItem(recordId){ if(!confirm('只有原始建立者可以刪除。確定刪除整份名單？')) return; loading(true); callApi('deleteCRM',{u:gUser,p:gPass,recordId:recordId}).then(function(res){ loading(false); if(!res.success){ alert(res.error||'刪除失敗'); return; } closeModal(); loadCRM(); }); }
+function completeTodoFromPayload(payload){ completeTodo(decodePayload(payload)); }
+function completeTodo(recordId){ if(!confirm('完成此待辦事項？')) return; var item=crmData.find(function(entry){ return entry.recordId===recordId; }); if(item){ item.todo=''; loading(true); callApi('saveCRM',{u:gUser,p:gPass,item:item}).then(function(res){ loading(false); if(!res.success){ alert(res.error||'更新失敗'); return; } loadCRM(); }); } }
 function openAdminCRMFromPayload(payload) { openAdminCRM(decodePayload(payload)); }
 function openAdminCRM(userName) { document.getElementById('modal-overlay').style.display = 'flex'; document.getElementById('modal-title').innerText = "載入中..."; document.getElementById('modal-content').innerHTML = "請稍候..."; loadCRM(userName); }
 
@@ -779,14 +886,14 @@ function doLogin(){
          if(window.OneSignal) OneSignal.User.addTag("user", u);
          loadShareData();
          lastLogTime = new Date().getTime(); 
-         if(gData.teamMajor === "主領班") { document.getElementById('n-admin').style.display = 'block'; } 
+         if(gData.teamMajor === "主領班" || String(gUser).toUpperCase() === "ADMIN") { document.getElementById('n-admin').style.display = 'block'; }
          enterGame(); 
       } else { alert(r.msg); } 
    }); 
 }
 function enterGame(){ document.getElementById('auth-screen').style.display='none'; document.getElementById('game-screen').style.display='flex'; renderUI(); }
 function logout(){ if(confirm("登出?")){ localStorage.removeItem("xd_p"); location.reload(); } }
-function renderUI(){ document.getElementById('ui-team').innerText = gData.teamFull; document.getElementById('p-job').innerText = gData.job; updateDashboard(); var ck = document.getElementById('ck-sport'); if(gData.task_sport_done){ ck.style.background='var(--primary)'; ck.style.borderColor='var(--primary)'; } else { ck.style.background='transparent'; ck.style.borderColor='#ddd'; } updTimer(gData.task_read_time||0); }
+function renderUI(){ document.getElementById('ui-team').innerText = gData.teamFull; document.getElementById('p-job').innerText = gData.job; updateDashboard(); renderSeason32Goals(true); var ck = document.getElementById('ck-sport'); if(gData.task_sport_done){ ck.style.background='var(--primary)'; ck.style.borderColor='var(--primary)'; } else { ck.style.background='transparent'; ck.style.borderColor='#ddd'; } updTimer(gData.task_read_time||0); }
 function addCount(id) { var el = document.getElementById(id); el.value = parseInt(el.value || 0) + 1; updateDashboard(); }
 function minusCount(id) { var el = document.getElementById(id); var val = parseInt(el.value || 0); if (val > 0) { el.value = val - 1; updateDashboard(); } }
 function updateDashboard() { var addS = parseInt(document.getElementById('inp-spoke').value||0); var addC = parseInt(document.getElementById('inp-conv').value||0); var addCl = parseInt(document.getElementById('inp-class').value||0); var totalS = (gData.spoke_count||0) + addS; var totalC = (gData.convert_count||0) + addC; var totalCl = (gData.class_count||0) + addCl; document.getElementById('today-dash').innerText = `📊 今日已累積：開口 ${totalS} | 渡眾 ${totalC} | 入班 ${totalCl}`; }
@@ -807,6 +914,11 @@ function toggleTimer(){
 function updTimer(s){ var m=Math.floor(s/60), sec=s%60; document.getElementById('timer-display').innerText = (m<10?"0"+m:m)+":"+(sec<10?"0"+sec:sec); }
 function toggleSport(){ if(gData.task_sport_done) return; gData.task_sport_done = true; renderUI(); saveData({action:"運動", detail:"完成今日30分鐘運動！"}); }
 function saveAchievements(){ var addS = parseInt(document.getElementById('inp-spoke').value||0); var addC = parseInt(document.getElementById('inp-conv').value||0); var addCl = parseInt(document.getElementById('inp-class').value||0); if(addS==0 && addC==0 && addCl==0) { alert("請輸入數量"); return; } gData.spoke_count = (gData.spoke_count||0) + addS; gData.convert_count = (gData.convert_count||0) + addC; gData.class_count = (gData.class_count||0) + addCl; loading(true); var msg = `開口${addS}, 渡眾${addC}, 入班${addCl}`; callApi('saveGameData', {u:gUser, p:gPass, data:gData, log:{action:"回報成果", detail: msg}}).then(r => { loading(false); if(r.gameData) gData = r.gameData; document.getElementById('inp-spoke').value=0; document.getElementById('inp-conv').value=0; document.getElementById('inp-class').value=0; renderUI(); alert("📜 紀錄已同步！"); }); }
+function season32GoalValue(value) { var number = parseInt(value, 10); return Number.isFinite(number) && number > 0 ? number : 0; }
+function season32Metrics() { return { spoke:(Number(gData.total_spoke)||0)+(Number(gData.spoke_count)||0), convert:(Number(gData.total_convert)||0)+(Number(gData.convert_count)||0), joinClass:(Number(gData.total_class)||0)+(Number(gData.class_count)||0) }; }
+function renderSeason32Goal(name, achieved, target) { var percent = target > 0 ? Math.min(100, Math.round(achieved / target * 100)) : 0; document.getElementById('goal-'+name+'-label').innerText = achieved + ' / ' + target; document.getElementById('goal-'+name+'-progress').style.width = percent + '%'; }
+function renderSeason32Goals(syncInputs) { var goals = gData.season32_goals || {}; if(syncInputs) { document.getElementById('goal-spoke').value = season32GoalValue(goals.spoke); document.getElementById('goal-convert').value = season32GoalValue(goals.convert); document.getElementById('goal-class').value = season32GoalValue(goals.joinClass); } var metrics = season32Metrics(); renderSeason32Goal('spoke', metrics.spoke, season32GoalValue(document.getElementById('goal-spoke').value)); renderSeason32Goal('convert', metrics.convert, season32GoalValue(document.getElementById('goal-convert').value)); renderSeason32Goal('class', metrics.joinClass, season32GoalValue(document.getElementById('goal-class').value)); }
+function saveSeason32Goals() { gData.season32_goals = { spoke:season32GoalValue(document.getElementById('goal-spoke').value), convert:season32GoalValue(document.getElementById('goal-convert').value), joinClass:season32GoalValue(document.getElementById('goal-class').value) }; loading(true); callApi('saveGameData', {u:gUser,p:gPass,data:gData,log:null}).then(function(res){ loading(false); if(!res.success){ alert(res.error||res.msg||'儲存失敗'); return; } if(res.gameData) gData=res.gameData; renderSeason32Goals(true); alert('立愿目標已儲存'); }); }
 function saveData(logObj){ return callApi('saveGameData', {u:gUser, p:gPass, data:gData, log:logObj}).then(function(r){ if(r.gameData) gData = r.gameData; return r; }); }
 function setLocalReminder() { var t = document.getElementById('reminder-time').value; localStorage.setItem("reminder_time", t); if('Notification' in window) Notification.requestPermission(); alert("提醒時間已設定為 " + t); }
 

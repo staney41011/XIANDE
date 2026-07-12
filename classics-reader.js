@@ -237,15 +237,7 @@
   }
 
   function buildSpeechText(text) {
-    if (!configurePinyin()) return String(text || "");
-    var items = root.pinyinPro.pinyin(text, {
-      type: "all",
-      toneType: "symbol",
-      traditional: true,
-      toneSandhi: true,
-      segmentit: 2
-    });
-    return buildSpeechTextFromItems(items) || String(text || "");
+    return String(text || "").trim();
   }
 
   function normalizePassages(passages) {
@@ -535,14 +527,14 @@
     var voice = selectedVoice();
     if (voice) utterance.voice = voice;
     utterance.lang = voice && voice.lang ? voice.lang : "zh-TW";
-    utterance.rate = speechText === passage.text ? 0.9 : 0.82;
+    utterance.rate = 0.9;
     utterance.pitch = 1;
 
     utterance.onstart = function() {
       if (token !== state.speechToken) return;
       state.currentSpeechIndex = passageIndex;
       highlightSpeechPassage(passageIndex);
-      setSpeechStatus("第 " + (passageIndex + 1) + " / " + state.passages.length + " 句 · 拼音導讀");
+      setSpeechStatus("第 " + (passageIndex + 1) + " / " + state.passages.length + " 句 · 中文朗讀");
       updateSpeechButtons();
     };
 
@@ -598,7 +590,8 @@
       stripPinyinTone: stripPinyinTone,
       pinyinToZhuyin: pinyinToZhuyin,
       safeSourceUrl: safeSourceUrl,
-      buildSpeechTextFromItems: buildSpeechTextFromItems
+      buildSpeechTextFromItems: buildSpeechTextFromItems,
+      buildSpeechText: buildSpeechText
     }
   };
 });
