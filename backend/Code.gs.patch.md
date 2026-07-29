@@ -36,6 +36,7 @@ var ACTION_HANDLERS = {
   getPersonalLogs: function(params) { return { list: getPersonalLogs(params.u) }; },
   getCalendarData: function(params) { return getCalendarData(params.u, params.year, params.month); },
   getAdminReport: function(params) { return getAdminReport(params.filters, params.mode, params.dateVal); },
+  getSeason32GoalReport: function(params) { return getSeason32GoalReportV4(params.u, params.p); },
   getHallDetails: function(params) { return getHallDetailsV2(params.hall, params.u, params.p); },
   getLatestLog: function(params) { return getLatestLog(); },
   broadcast: function(params) { return sendBroadcast(params.msg, params.time); },

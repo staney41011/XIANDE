@@ -30,6 +30,7 @@ let crmCrossHallSelected = new Set();
 var gUser=null, gPass=null, gData={}, menuConfig={}, crmData=[];
 var allEvents = [], activeFilters = [], shareDataList = [];
 var eventCategories = [], eventCanManage = false, eventCanAdd = false, crmMemberOptions = [];
+var season32GoalReportData = null;
 var cmsUploadFiles = []; 
 var timerInt=null, isTimer=false;
 var curYear = new Date().getFullYear(), curMonth = new Date().getMonth() + 1;
@@ -713,8 +714,74 @@ async function nativeShare(index) {
 
 // ... CMS Logic ...
 function switchAdminView(view) {
-   ['promo', 'broadcast', 'report', 'roles'].forEach(v => document.getElementById('adm-view-'+v).style.display = 'none');
+   ['promo', 'broadcast', 'report', 'goals', 'roles'].forEach(v => document.getElementById('adm-view-'+v).style.display = 'none');
    document.getElementById('adm-view-'+view).style.display = 'block';
+}
+
+function loadSeason32GoalReport() {
+   var summary = document.getElementById('goal-report-summary');
+   var halls = document.getElementById('goal-report-halls');
+   var members = document.getElementById('goal-report-members');
+   summary.innerHTML = '<div class="goal-report-empty">統計中...</div>';
+   halls.innerHTML = '';
+   members.innerHTML = '<div class="goal-report-empty">讀取成員目標...</div>';
+   callApi('getSeason32GoalReport', {u:gUser, p:gPass}).then(function(res) {
+      if (!res.success) {
+         season32GoalReportData = null;
+         summary.innerHTML = `<div class="goal-report-empty">${escapeHtml(res.error || '讀取失敗')}</div>`;
+         members.innerHTML = '';
+         return;
+      }
+      season32GoalReportData = res;
+      renderSeason32GoalSummary();
+   }).catch(function(err) {
+      season32GoalReportData = null;
+      summary.innerHTML = `<div class="goal-report-empty">連線失敗：${escapeHtml(err.message || err)}</div>`;
+      halls.innerHTML = '';
+      members.innerHTML = '';
+   });
+}
+
+function renderSeason32GoalSummary() {
+   if (!season32GoalReportData) return;
+   var report = season32GoalReportData;
+   var totals = report.totals || {};
+   document.getElementById('goal-report-updated').innerText = report.generatedAt
+      ? '更新時間 ' + report.generatedAt
+      : '每位成員填寫的目標與公堂合計';
+   document.getElementById('goal-report-summary').innerHTML =
+      `<div class="goal-total-item"><span>已填寫</span><strong>${Number(totals.filledCount)||0} / ${Number(totals.memberCount)||0}</strong></div>` +
+      `<div class="goal-total-item"><span>開口目標</span><strong>${Number(totals.spoke)||0}</strong></div>` +
+      `<div class="goal-total-item"><span>渡眾目標</span><strong>${Number(totals.convert)||0}</strong></div>` +
+      `<div class="goal-total-item"><span>入班目標</span><strong>${Number(totals.joinClass)||0}</strong></div>`;
+
+   document.getElementById('goal-report-halls').innerHTML = (report.halls || []).map(function(hall) {
+      return `<div class="goal-hall-card"><div class="goal-hall-title"><strong>${escapeHtml(hall.hall)}</strong><span>${Number(hall.filledCount)||0}/${Number(hall.memberCount)||0} 人已填</span></div><div class="goal-hall-stats"><span>開口 <b>${Number(hall.spoke)||0}</b></span><span>渡眾 <b>${Number(hall.convert)||0}</b></span><span>入班 <b>${Number(hall.joinClass)||0}</b></span></div></div>`;
+   }).join('') || '<div class="goal-report-empty">尚無公堂資料</div>';
+
+   var hallFilter = document.getElementById('goal-report-hall-filter');
+   var selectedHall = hallFilter.value;
+   hallFilter.innerHTML = '<option value="">全部公堂</option>' + (report.halls || []).map(function(hall) {
+      return `<option value="${escapeAttr(hall.hall)}">${escapeHtml(hall.hall)}</option>`;
+   }).join('');
+   if ((report.halls || []).some(function(hall) { return hall.hall === selectedHall; })) {
+      hallFilter.value = selectedHall;
+   }
+   renderSeason32GoalMembers();
+}
+
+function renderSeason32GoalMembers() {
+   if (!season32GoalReportData) return;
+   var hall = document.getElementById('goal-report-hall-filter').value;
+   var query = document.getElementById('goal-report-search').value.trim().toLowerCase();
+   var members = (season32GoalReportData.members || []).filter(function(member) {
+      if (hall && member.hall !== hall) return false;
+      return !query || String(member.name || '').toLowerCase().includes(query);
+   });
+   document.getElementById('goal-report-member-count').innerText = members.length + ' 人';
+   document.getElementById('goal-report-members').innerHTML = members.map(function(member) {
+      return `<div class="goal-member-row ${member.hasGoals ? '' : 'is-unfilled'}"><div class="goal-member-main"><strong>${escapeHtml(member.name)}</strong><span>${escapeHtml(member.hall)}${member.hasGoals ? '' : ' · 尚未填寫'}</span></div><div class="goal-member-stat"><span>開口</span><strong>${Number(member.spoke)||0}</strong></div><div class="goal-member-stat"><span>渡眾</span><strong>${Number(member.convert)||0}</strong></div><div class="goal-member-stat"><span>入班</span><strong>${Number(member.joinClass)||0}</strong></div></div>`;
+   }).join('') || '<div class="goal-report-empty">找不到符合條件的成員</div>';
 }
 function renderCmsList() {
    var html = "";

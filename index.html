@@ -9,7 +9,7 @@
   
   <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
   <script>
-    const APP_VERSION = "20260712-Community-V3";
+    const APP_VERSION = "20260730-Goals-V4";
 
     (function checkUpdate() {
       const savedVersion = localStorage.getItem("app_version");
@@ -261,8 +261,11 @@
               <div class="admin-menu-btn" onclick="switchAdminView('broadcast')">
                  <span class="admin-menu-icon">📢</span>全員廣播
               </div>
-              <div class="admin-menu-btn" onclick="switchAdminView('report')">
+               <div class="admin-menu-btn" onclick="switchAdminView('report')">
                  <span class="admin-menu-icon">📊</span>數據報表
+              </div>
+              <div class="admin-menu-btn" onclick="switchAdminView('goals'); loadSeason32GoalReport()">
+                 <span class="admin-menu-icon">🎯</span>立愿目標
               </div>
                <div class="admin-menu-btn" onclick="runBatchCrawler()">
                   <span class="admin-menu-icon">📚</span>經典更新
@@ -309,6 +312,30 @@
               <button class="btn btn-primary" onclick="runAdminQuery()">🔍 查詢報表</button>
               <div id="admin-report" class="admin-report-box" style="display:none; margin-top:15px;"></div>
               <div id="admin-list" style="margin-top:10px;"></div>
+           </div>
+
+           <div id="adm-view-goals" style="display:none;">
+              <div class="goal-report-heading">
+                 <div>
+                    <h4>賢德班第32期立愿目標</h4>
+                    <p id="goal-report-updated">讀取每位成員填寫的目標與公堂合計</p>
+                 </div>
+                 <button type="button" class="goal-report-refresh" title="重新整理" aria-label="重新整理立愿目標" onclick="loadSeason32GoalReport()">↻</button>
+              </div>
+              <div id="goal-report-summary" class="goal-report-summary"></div>
+              <h5 class="goal-report-subtitle">各公堂目標合計</h5>
+              <div id="goal-report-halls" class="goal-hall-grid"></div>
+              <div class="goal-report-member-heading">
+                 <h5 class="goal-report-subtitle">個人填寫明細</h5>
+                 <span id="goal-report-member-count"></span>
+              </div>
+              <div class="goal-report-filters">
+                 <select id="goal-report-hall-filter" class="input-field" aria-label="依公堂篩選" onchange="renderSeason32GoalMembers()">
+                    <option value="">全部公堂</option>
+                 </select>
+                 <input id="goal-report-search" type="search" class="input-field" placeholder="搜尋姓名" aria-label="搜尋姓名" oninput="renderSeason32GoalMembers()">
+              </div>
+              <div id="goal-report-members" class="goal-member-list"><div class="goal-report-empty">載入中...</div></div>
            </div>
 
            <div id="adm-view-roles" style="display:none;">

@@ -1,5 +1,5 @@
 // sw.js
-var CACHE_NAME = 'xd-app-v5';
+var CACHE_NAME = 'xd-app-v6';
 var urlsToCache = [
   './',
   'index.html',
