@@ -1,6 +1,6 @@
 # 賢德志士｜Firebase 遷移計畫（獨立測試分支）
 
-狀態：**準備中，尚未建立或連接 Firebase 正式專案，尚未匯入會員資料，尚未部署。**
+狀態：**Firebase 獨立專案已建立；Firestore 資料庫、安全規則及索引已部署。Functions、Authentication、會員資料匯入和正式網站切換仍未完成。**
 來源：本 repo `main` 的 PWA + 私有 Google Sheets / Apps Script。
 開發分支：`feature/firebase-migration-staging`。正式 `main`、現有 Google Sheet、Apps Script 保持原樣。
 
@@ -85,5 +85,15 @@
 
 ## 目前限制
 
-Firebase 專案尚未由使用者連接並授權；目前 staging 只是**非正式開發分支**。
+已使用使用者授權的 CWL_PC Desktop Commander／Firebase CLI 連上 Firebase，建立專案 `xiande-zhishi-2026`（2026-10-22）。Firestore `(default)` 為 `asia-east1` Standard、免費額度、啟用刪除保護；註冊 Web App `Xiande Zhishi PWA`，並確認 Firestore rules/indexes 部署成功。Cloud Functions 尚未部署、Authentication 尚未設定或驗證；目前 staging 仍是**非正式開發分支**，正式網站及 Google Sheets 不變。
 沒有 Firebase project ID、API 設定、伺服器憑證時，不可假裝已經建立資料庫、完成遷移或實測成功。
+
+
+## 已驗證之 Firebase 資源（2026-10-22）
+
+- Project ID: `xiande-zhishi-2026`
+- Web App ID: `1:550647525398:web:88d8c5d2fd676811b78537`
+- Firestore: `(default)`, `asia-east1`, Standard, `DELETE_PROTECTION_ENABLED`, `freeTier=true`
+- Firebase CLI: `15.19.0`，已用授權電腦 CLI 實際建立並確認
+- `firebase deploy --only firestore:rules,firestore:indexes --project xiande-zhishi-2026`：exit code 0，規則編譯成功，索引部署完成，已發布規則
+- 重要：**不得部署 Functions 或匯入個資前**，先確認計費方案、登入遷移方案、Firestore emulator 權限測試、一次性匯入及對帳；原 Google Sheets 存在歷史明文密碼，不得提交公開 Repo 或 Firebase 集合
