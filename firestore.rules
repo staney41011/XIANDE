@@ -1,0 +1,80 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+    function self(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+    function admin() {
+      return signedIn() && request.auth.token.admin == true;
+    }
+    function myHall() {
+      return signedIn() ? request.auth.token.get('hallId', '') : '';
+    }
+    function sharedRecord() {
+      return signedIn() &&
+        (resource.data.ownerUid == request.auth.uid ||
+         request.auth.uid in resource.data.get('sharedWithUids', []));
+    }
+
+    // Never place credentials, password hashes, tokens or private CRM data here.
+    match /publicConfig/{id} {
+      allow read: if true;
+      allow write: if false;
+    }
+    match /profiles/{uid} {
+      allow get: if self(uid) || admin();
+      allow list: if admin();
+      allow write: if false;
+    }
+    match /memberStats/{uid} {
+      allow get: if self(uid) || admin() ||
+        (signedIn() && myHall() != '' && myHall() == resource.data.hallId);
+      allow list: if admin();
+      allow write: if false;
+    }
+    match /orchardSeasons/{id} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+    match /orchardHalls/{id} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+    match /activityLogs/{id} {
+      // Like the original global activity feed: visible to signed-in members.
+      allow read: if signedIn();
+      allow write: if false;
+    }
+    match /crmRecords/{id} {
+      // Queries must include compatible ownership / sharing filters.
+      allow read: if admin() || sharedRecord();
+      allow write: if false;
+    }
+    match /crmNotes/{id} {
+      // Fetch via an authorized server endpoint until scoped rules are tested.
+      allow read, write: if false;
+    }
+    match /events/{id} {
+      // Visibility filtering is provided by authorized server endpoint in phase 2.
+      allow read, write: if false;
+    }
+    match /shareItems/{id} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+    match /classics/{id} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+    match /system/{id} {
+      // Active season/config is read through callable backend only.
+      allow read, write: if false;
+    }
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
