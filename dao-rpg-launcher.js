@@ -1,11 +1,14 @@
-/* 道學冒險：獨立模組開啟器。只傳匿名會員雜湊，不將賢德志士登入密碼傳入遊戲。 */
+/* 道學冒險：隔離遊戲畫面，由賢德志士保存匿名分區的遊戲進度。 */
 (function () {
   'use strict';
   var previousFocus = null;
   var opening = false;
+  var activeHash = '';
+  var PREFIX = 'chongzheng.dao-rpg.v1.';
 
+  function el(id) { return document.getElementById(id); }
   function showError(message) {
-    var note = document.getElementById('dao-adventure-message');
+    var note = el('dao-adventure-message');
     if (note) note.textContent = message;
   }
 
@@ -20,38 +23,79 @@
     }).join('');
   }
 
+  function reply(frame, type, data) {
+    if (!frame || !frame.contentWindow) return;
+    frame.contentWindow.postMessage(Object.assign({ source: 'xiande', type: type }, data || {}), '*');
+  }
+
+  window.addEventListener('message', function (event) {
+    var frame = el('dao-adventure-frame');
+    var overlay = el('dao-adventure-overlay');
+    if (!frame || !overlay || overlay.hidden || !activeHash ||
+        event.source !== frame.contentWindow ||
+        !event.data || event.data.source !== 'dao-rpg') return;
+
+    if (event.data.type === 'ready') {
+      var stored = null;
+      try {
+        var raw = localStorage.getItem(PREFIX + activeHash);
+        if (raw) stored = JSON.parse(raw);
+      } catch (error) {
+        showError('遊戲存檔讀取失敗，將以新的進度開始。');
+      }
+      reply(frame, 'load', { progress: stored });
+    } else if (event.data.type === 'save') {
+      var ok = false;
+      try {
+        var progress = event.data.progress;
+        if (!progress || typeof progress !== 'object' || Array.isArray(progress)) {
+          throw new Error('invalid progress');
+        }
+        var serialized = JSON.stringify(progress);
+        if (serialized.length > 300000) throw new Error('oversized progress');
+        localStorage.setItem(PREFIX + activeHash, serialized);
+        ok = true;
+      } catch (error) {
+        showError('目前無法保存遊戲進度，請檢查瀏覽器儲存空間。');
+      }
+      reply(frame, 'save-ack', { ok: ok });
+    }
+  });
+
   window.openDaoAdventure = async function () {
-    var overlay = document.getElementById('dao-adventure-overlay');
-    var frame = document.getElementById('dao-adventure-frame');
+    var overlay = el('dao-adventure-overlay');
+    var frame = el('dao-adventure-frame');
     var member = (typeof gUser !== 'undefined') ? gUser : null;
-    if (!member || !overlay || !frame || opening || overlay.hidden === false) return;
+    if (!member || !overlay || !frame || opening || !overlay.hidden) return;
     opening = true;
     previousFocus = document.activeElement;
     overlay.hidden = false;
     overlay.style.display = 'flex';
     document.body.classList.add('dao-adventure-open');
     showError('正在開啟四島冒險……');
-    document.getElementById('dao-adventure-close').focus();
+    el('dao-adventure-close').focus();
     try {
-      var hash = await memberHash(member);
+      activeHash = await memberHash(member);
       if (overlay.hidden) return;
-      frame.src = './dao-rpg/index.html?profile=' + encodeURIComponent(hash);
+      frame.src = './dao-rpg/index.html?profile=' + encodeURIComponent(activeHash);
       showError('');
     } catch (error) {
+      activeHash = '';
       showError('無法安全辨識會員，請使用最新版瀏覽器重新進入。');
-      console.warn('Dao RPG profile setup failed', error);
+      console.warn('Dao RPG setup failed', error);
     } finally {
       opening = false;
     }
   };
 
   window.closeDaoAdventure = function () {
-    var overlay = document.getElementById('dao-adventure-overlay');
-    var frame = document.getElementById('dao-adventure-frame');
+    var overlay = el('dao-adventure-overlay');
+    var frame = el('dao-adventure-frame');
     if (!overlay || overlay.hidden) return;
     overlay.hidden = true;
     overlay.style.display = 'none';
     document.body.classList.remove('dao-adventure-open');
+    activeHash = '';
     if (frame) frame.removeAttribute('src');
     if (previousFocus && typeof previousFocus.focus === 'function') previousFocus.focus();
   };
