@@ -1,5 +1,5 @@
 // sw.js
-var CACHE_NAME = 'xd-app-v7-dao-admin';
+var CACHE_NAME = 'xd-app-v8-dao-rpg-v2';
 var urlsToCache = [
   './',
   'index.html',
