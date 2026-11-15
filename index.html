@@ -142,6 +142,12 @@
            <div style="color:var(--primary);">Go &gt;</div>
         </div>
         
+        <button type="button" id="dao-adventure-entry" class="card dao-entry-card" onclick="openDaoAdventure()" aria-label="開啟道學冒險四島 RPG" hidden style="display:none">
+          <span style="font-size:28px; margin-right:15px;" aria-hidden="true">🗺️</span>
+          <span style="flex:1;"><strong style="display:block; color:var(--text); font-size:16px;">道學冒險</strong><small style="display:block; color:#666; margin-top:5px;">晨鐘・性理題釋・皇母訓子十誡・佛規諭錄</small></span>
+          <span style="color:var(--primary); font-weight:bold;" aria-hidden="true">Go &gt;</span>
+        </button>
+        
         <div class="card" style="border-left: 5px solid #00c300;">
            <div class="help-btn" onclick="alert('左滑查看更多。\n點擊按鈕可同時喚起圖片與文字分享。')">?</div>
            <h3 style="margin-top:0; color:#00c300; margin-bottom:15px;">🗣️ 方便開口包</h3>
@@ -359,7 +365,31 @@
   </div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pinyin-pro/3.28.1/index.min.js" integrity="sha384-fZUrCbNACAmjqGdoMaI/ZmF0IOGC5JmHsRlbK4XHfprfBg9Ai8LwDunglXG9sTbf" crossorigin="anonymous"></script>
+  <div id="dao-adventure-overlay" class="dao-adventure-overlay" role="dialog" aria-modal="true" aria-label="道學冒險" hidden style="display:none">
+    <div class="dao-adventure-toolbar">
+      <button id="dao-adventure-close" type="button" onclick="closeDaoAdventure()">← 返回賢德志士</button>
+      <span>🗺️ 道學冒險 <small>教學試玩版</small></span>
+    </div>
+    <div id="dao-adventure-message" role="status" aria-live="polite"></div>
+    <iframe id="dao-adventure-frame" title="崇正道學群島四島修行 RPG" loading="lazy" allow="fullscreen" sandbox="allow-scripts allow-downloads allow-modals allow-popups allow-popups-to-escape-sandbox"></iframe>
+  </div>
+  <style>
+    .dao-entry-card[hidden]{display:none!important;}
+    .dao-entry-card{display:flex;align-items:center;cursor:pointer;border:0;border-left:5px solid #72a3cd;background:#fff;width:100%;text-align:left;font-family:inherit;}
+    .dao-entry-card:focus-visible{outline:3px solid #4b93bb;outline-offset:2px;}
+    body.dao-adventure-open{overflow:hidden;}
+    .dao-adventure-overlay[hidden]{display:none!important;}
+    .dao-adventure-overlay{position:fixed;inset:0;z-index:99999;display:flex;flex-direction:column;background:#0d1e35;color:white;height:100vh;height:100dvh;}
+    .dao-adventure-toolbar{flex:none;min-height:48px;padding:calc(7px + env(safe-area-inset-top)) 12px 7px;display:flex;justify-content:space-between;align-items:center;gap:10px;background:#142945;border-bottom:1px solid #425776;}
+    .dao-adventure-toolbar button{appearance:none;padding:9px 12px;border:1px solid #7488a5;border-radius:9px;background:#213c5c;color:#fff;font-size:14px;font-weight:bold;cursor:pointer;}
+    .dao-adventure-toolbar span{font-size:14px;font-weight:bold;white-space:nowrap;}
+    .dao-adventure-toolbar small{font-size:11px;font-weight:normal;color:#d0dcf1;}
+    #dao-adventure-message{font-size:12px;text-align:center;color:#ffdb99;}
+    #dao-adventure-message:empty{display:none;}
+    #dao-adventure-frame{display:block;flex:1;width:100%;min-height:0;border:0;background:#0d1e35;}
+  </style>
   <script src="classics-reader.js"></script>
   <script src="app.js"></script>
+  <script src="dao-rpg-launcher.js"></script>
 </body>
 </html>

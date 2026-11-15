@@ -1086,7 +1086,7 @@ function doLogin(){
       } else { alert(r.msg); } 
    }); 
 }
-function enterGame(){ document.getElementById('auth-screen').style.display='none'; document.getElementById('game-screen').style.display='flex'; renderUI(); }
+function enterGame(){ document.getElementById('auth-screen').style.display='none'; document.getElementById('game-screen').style.display='flex'; renderUI(); if (typeof window.syncDaoAdventureVisibility === 'function') window.syncDaoAdventureVisibility(); }
 function logout(){ if(confirm("登出?")){ localStorage.removeItem("xd_p"); location.reload(); } }
 function renderUI(){ document.getElementById('ui-team').innerText = gData.teamFull; document.getElementById('p-job').innerText = gData.memberRole==='學長姐' ? (gData.job+'｜學長姐') : gData.job; updateDashboard(); renderSeason32Goals(true); var ck = document.getElementById('ck-sport'); if(gData.task_sport_done){ ck.style.background='var(--primary)'; ck.style.borderColor='var(--primary)'; } else { ck.style.background='transparent'; ck.style.borderColor='#ddd'; } updTimer(gData.task_read_time||0); }
 function addCount(id) { var el = document.getElementById(id); el.value = parseInt(el.value || 0) + 1; updateDashboard(); }
