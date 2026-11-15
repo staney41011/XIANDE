@@ -7,6 +7,21 @@
   var PREFIX = 'chongzheng.dao-rpg.v1.';
 
   function el(id) { return document.getElementById(id); }
+  function isAdminSession() {
+    var screen = el('game-screen');
+    return typeof gUser !== 'undefined' &&
+      String(gUser || '').trim().toUpperCase() === 'ADMIN' &&
+      !!screen && screen.style.display === 'flex';
+  }
+  window.syncDaoAdventureVisibility = function () {
+    var entry = el('dao-adventure-entry');
+    if (!entry) return;
+    var enabled = isAdminSession();
+    entry.hidden = !enabled;
+    entry.style.display = enabled ? 'flex' : 'none';
+    if (!enabled && !el('dao-adventure-overlay').hidden) window.closeDaoAdventure();
+  };
+
   function showError(message) {
     var note = el('dao-adventure-message');
     if (note) note.textContent = message;
@@ -31,7 +46,7 @@
   window.addEventListener('message', function (event) {
     var frame = el('dao-adventure-frame');
     var overlay = el('dao-adventure-overlay');
-    if (!frame || !overlay || overlay.hidden || !activeHash ||
+    if (!frame || !overlay || overlay.hidden || !activeHash || !isAdminSession() ||
         event.source !== frame.contentWindow ||
         !event.data || event.data.source !== 'dao-rpg') return;
 
@@ -66,7 +81,7 @@
     var overlay = el('dao-adventure-overlay');
     var frame = el('dao-adventure-frame');
     var member = (typeof gUser !== 'undefined') ? gUser : null;
-    if (!member || !overlay || !frame || opening || !overlay.hidden) return;
+    if (!isAdminSession() || !member || !overlay || !frame || opening || !overlay.hidden) return;
     opening = true;
     previousFocus = document.activeElement;
     overlay.hidden = false;
