@@ -59,8 +59,72 @@
   function drawBuilding(x,base,color,scale=1){ctx.save();ctx.translate(x,base);ctx.scale(scale,scale);ctx.fillStyle='#0004';ctx.beginPath();ctx.ellipse(0,3,112,17,0,0,7);ctx.fill();ctx.fillStyle='#d9be89';ctx.fillRect(-84,-133,168,123);ctx.fillStyle='#534132';for(let z=-72;z<78;z+=32)ctx.fillRect(z,-123,6,115);ctx.fillStyle='#f9e2b1';for(let z=-65;z<75;z+=32)ctx.fillRect(z,-110,22,62);ctx.fillStyle=color;ctx.beginPath();ctx.moveTo(-114,-146);ctx.quadraticCurveTo(-57,-157,0,-173);ctx.quadraticCurveTo(60,-160,114,-146);ctx.lineTo(103,-131);ctx.lineTo(-105,-131);ctx.fill();ctx.strokeStyle='#edce90';ctx.lineWidth=7;ctx.beginPath();ctx.moveTo(-114,-143);ctx.quadraticCurveTo(0,-167,114,-143);ctx.stroke();ctx.fillStyle='#765644';ctx.fillRect(-94,-25,188,25);ctx.restore()}
   function drawTree(x,ground,phase=0){ctx.save();ctx.translate(x,ground);ctx.fillStyle='#3f483c';ctx.beginPath();ctx.ellipse(0,2,42,12,0,0,7);ctx.fill();ctx.fillStyle='#6a493e';ctx.fillRect(-9,-132,18,133);const green=themes[island].ground;for(let j=0;j<3;j++){ctx.fillStyle=j%2?'#355a54':green;ctx.beginPath();ctx.ellipse((j-1)*17+Math.sin(currentTime*.0006+phase)*3,-153-j*20,65-j*9,39-j*3,0,0,7);ctx.fill();ctx.fillStyle='#ffffff20';ctx.beginPath();ctx.ellipse(-11+(j-1)*17,-173-j*20,34,12,-.1,0,7);ctx.fill()}ctx.restore()}
   function drawLamp(x,ground,t){ctx.save();ctx.translate(x,ground);ctx.fillStyle='#5a4c42';ctx.fillRect(-7,-82,14,82);ctx.fillRect(-20,-92,40,12);ctx.fillStyle='#fbe9bb';ctx.shadowColor='#fff0ae';ctx.shadowBlur=23+5*Math.sin(t/350+x);ctx.fillRect(-12,-117,24,26);ctx.shadowBlur=0;ctx.fillStyle='#72513c';ctx.beginPath();ctx.moveTo(-23,-117);ctx.lineTo(0,-131);ctx.lineTo(23,-117);ctx.fill();ctx.restore()}
-  function drawNPC(x,ground,idx,t){const done=!!active().cards[`${island}:${idx}`];ctx.save();ctx.translate(x,ground+Math.sin(t/800+idx)*3);ctx.fillStyle='#10222d77';ctx.beginPath();ctx.ellipse(0,10,37,10,0,0,7);ctx.fill();ctx.fillStyle=done?'#7dd5ad':'#ffdd98';ctx.shadowColor=done?'#b7efb4':'#f6e5a1';ctx.shadowBlur=28;ctx.beginPath();ctx.arc(0,-105,13,0,7);ctx.fill();ctx.shadowBlur=0;ctx.fillStyle=done?'#8dbaaa':idx%2?'#af8c72':'#6f9ca2';ctx.beginPath();ctx.moveTo(-34,1);ctx.lineTo(-28,-75);ctx.lineTo(-13,-92);ctx.lineTo(15,-92);ctx.lineTo(30,-75);ctx.lineTo(36,1);ctx.closePath();ctx.fill();ctx.strokeStyle='#fee7c1';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(-25,-64);ctx.lineTo(0,-38);ctx.lineTo(24,-64);ctx.stroke();ctx.fillStyle='#efc49d';ctx.beginPath();ctx.arc(0,-106,23,0,7);ctx.fill();ctx.fillStyle='#343e41';ctx.beginPath();ctx.arc(0,-116,24,Math.PI,Math.PI*2);ctx.lineTo(24,-108);ctx.lineTo(-24,-108);ctx.fill();ctx.fillStyle='#4e3831';ctx.beginPath();ctx.arc(-8,-104,2,0,7);ctx.arc(8,-104,2,0,7);ctx.fill();ctx.fillStyle=done?'#ddf7d9':'#fff4d8';ctx.font='bold 22px sans-serif';ctx.textAlign='center';ctx.fillText(done?'✓':'!',0,-145);ctx.fillStyle='#102b38df';ctx.strokeStyle='#f5dfad9c';ctx.lineWidth=2;const title=C[island][idx][0];ctx.font='bold 16px "Noto Sans TC",sans-serif';const width=Math.min(230,Math.max(125,ctx.measureText(title).width+30));ctx.beginPath();ctx.roundRect(-width/2,23,width,39,18);ctx.fill();ctx.stroke();ctx.fillStyle='#fff2d5';ctx.fillText(title,0,48);ctx.restore()}
-  function drawHero(x,ground,t){let moving=press.size||walkTo!==null,step=moving?Math.sin(hero.stride)*7:0;ctx.save();ctx.translate(x,ground+step*.1);ctx.scale(hero.facing,1);ctx.fillStyle='#111a2080';ctx.beginPath();ctx.ellipse(0,10,35,11,0,0,7);ctx.fill();ctx.fillStyle='#2b4657';ctx.fillRect(-17,-31+step,13,31-step);ctx.fillRect(6,-31-step,13,31+step);ctx.fillStyle='#f3d7a4';ctx.fillRect(-35,-81,15,45);ctx.fillRect(21,-81,15,45);ctx.fillStyle='#366b7e';ctx.beginPath();ctx.moveTo(-26,-83);ctx.lineTo(24,-83);ctx.lineTo(38,-22);ctx.lineTo(-40,-22);ctx.fill();ctx.fillStyle='#f6dab2';ctx.beginPath();ctx.arc(0,-111,29,0,7);ctx.fill();ctx.fillStyle='#1e3542';ctx.beginPath();ctx.arc(0,-122,30,Math.PI,0);ctx.lineTo(30,-116);ctx.lineTo(-30,-116);ctx.fill();ctx.fillStyle='#282d2b';ctx.beginPath();ctx.arc(-9,-109,2.2,0,7);ctx.arc(9,-109,2.2,0,7);ctx.fill();ctx.fillStyle='#f8d796';ctx.beginPath();ctx.arc(0,-60,10,0,7);ctx.fill();ctx.restore()}
+  // Chibi 旅人與島民，使用細節分層的 Canvas 角色，不依賴外部人物素材
+  function drawNPC(x,ground,idx,t){
+    const done=!!active().cards[`${island}:${idx}`],tone=idx%4;
+    const robes=['#658d90','#b68d6c','#a17c9f','#68927f'];
+    const trim=['#e4cd97','#f6e1a8','#e7d4ef','#d3e5bd'];
+    ctx.save();ctx.translate(x,ground+Math.sin(t/700+idx)*2);
+    ctx.fillStyle='#172c3060';ctx.beginPath();ctx.ellipse(0,10,42,10,0,0,7);ctx.fill();
+    // Lantern glow and small interactive mark
+    const glow=done?'#b6f8d5':'#ffe9a7';
+    ctx.save();ctx.shadowColor=glow;ctx.shadowBlur=27;ctx.fillStyle=glow;
+    ctx.beginPath();ctx.arc(0,-151+Math.sin(t/550+idx)*5,6,0,7);ctx.fill();ctx.restore();
+    ctx.font='bold 25px serif';ctx.textAlign='center';ctx.fillStyle=done?'#b5f5cd':'#fff1bc';ctx.fillText(done?'✦':'❖',0,-164+Math.sin(t/550+idx)*5);
+    // Hair trailing behind shoulders
+    ctx.fillStyle='#292e34';ctx.beginPath();ctx.ellipse(0,-95,26,32,0,0,7);ctx.fill();
+    // Lower trousers and shoes
+    ctx.fillStyle='#30464b';ctx.fillRect(-23,-20,17,27);ctx.fillRect(6,-20,17,27);
+    ctx.fillStyle='#342c29';ctx.beginPath();ctx.ellipse(-15,7,15,6,-.1,0,7);ctx.ellipse(17,7,15,6,.1,0,7);ctx.fill();
+    // Layered robe body
+    const robe=ctx.createLinearGradient(-35,-90,43,3);robe.addColorStop(0,'#e2cba9');robe.addColorStop(.12,robes[tone]);robe.addColorStop(.7,robes[tone]);robe.addColorStop(1,'#2f5357');
+    ctx.fillStyle=robe;ctx.beginPath();ctx.moveTo(-22,-83);ctx.lineTo(24,-83);ctx.lineTo(38,-1);ctx.quadraticCurveTo(0,9,-38,-1);ctx.closePath();ctx.fill();
+    ctx.lineWidth=2.2;ctx.strokeStyle=trim[tone];ctx.stroke();
+    // Shoulder cape, sleeves and embroidered collar
+    ctx.fillStyle=robes[tone];ctx.beginPath();ctx.moveTo(-22,-80);ctx.lineTo(-42,-72);ctx.lineTo(-44,-35);ctx.quadraticCurveTo(-31,-29,-26,-40);ctx.lineTo(-16,-69);ctx.fill();ctx.beginPath();ctx.moveTo(22,-80);ctx.lineTo(41,-70);ctx.lineTo(42,-33);ctx.quadraticCurveTo(30,-31,24,-45);ctx.lineTo(13,-69);ctx.fill();
+    ctx.fillStyle='#f4cfa9';ctx.beginPath();ctx.arc(-38,-36,8,0,7);ctx.arc(37,-36,8,0,7);ctx.fill();
+    ctx.strokeStyle=trim[tone];ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(-13,-84);ctx.lineTo(0,-63);ctx.lineTo(13,-84);ctx.stroke();
+    ctx.strokeStyle='#e6c787';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(-31,-35);ctx.lineTo(0,-25);ctx.lineTo(32,-35);ctx.stroke();
+    ctx.fillStyle='#fae5bd';ctx.beginPath();ctx.arc(0,-49,7,0,7);ctx.fill();ctx.strokeStyle='#bd8e4f';ctx.stroke();
+    // Face, cheeks and detailed hair / hood
+    ctx.fillStyle='#f6cfaa';ctx.beginPath();ctx.ellipse(0,-107,26,28,0,0,7);ctx.fill();
+    ctx.fillStyle='#da9f82';ctx.beginPath();ctx.ellipse(-16,-99,5,3,0,0,7);ctx.ellipse(16,-99,5,3,0,0,7);ctx.fill();
+    ctx.fillStyle=idx%3===1?'#685044':'#2f3540';ctx.beginPath();ctx.moveTo(-27,-112);ctx.quadraticCurveTo(-28,-146,-3,-141);ctx.quadraticCurveTo(30,-146,27,-113);ctx.lineTo(19,-123);ctx.lineTo(9,-119);ctx.lineTo(1,-128);ctx.lineTo(-12,-118);ctx.closePath();ctx.fill();
+    ctx.strokeStyle='#ffffff42';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(-16,-130);ctx.quadraticCurveTo(0,-141,14,-130);ctx.stroke();
+    ctx.fillStyle='#292d31';ctx.beginPath();ctx.arc(-10,-105,2.6,0,7);ctx.arc(10,-105,2.6,0,7);ctx.fill();
+    ctx.strokeStyle='#aa645a';ctx.lineWidth=1.4;ctx.beginPath();ctx.arc(0,-95,6,.1,Math.PI-.1);ctx.stroke();
+    // Character-specific accessory
+    if(idx%3===1){ctx.fillStyle='#e4c78e';ctx.save();ctx.translate(34,-64);ctx.rotate(.25);ctx.fillRect(-7,-10,14,38);ctx.fillStyle='#c6a56c';ctx.fillRect(-9,-12,18,7);ctx.fillRect(-9,23,18,7);ctx.restore()}
+    if(idx%3===2){ctx.fillStyle='#ead7a7';ctx.beginPath();ctx.arc(-30,-46,10,0,7);ctx.fill();ctx.fillStyle='#886e4a';ctx.beginPath();ctx.arc(-30,-46,6,0,7);ctx.fill()}
+    // Focal label as a diegetic inked stone sign
+    const title=C[island][idx][0];ctx.font='bold 16px "Noto Sans TC",sans-serif';const width=Math.min(228,Math.max(125,ctx.measureText(title).width+32));
+    ctx.fillStyle='#102b38e9';ctx.strokeStyle=done?'#91e9c4aa':'#f5dbaec7';ctx.lineWidth=1.8;ctx.beginPath();ctx.roundRect(-width/2,23,width,39,16);ctx.fill();ctx.stroke();ctx.fillStyle='#fdf2df';ctx.textAlign='center';ctx.fillText(title,0,48);
+    ctx.restore();
+  }
+  function drawHero(x,ground,t){
+    const moving=press.size||walkTo!==null,step=moving?Math.sin(hero.stride)*7:0;
+    ctx.save();ctx.translate(x,ground+step*.11);ctx.scale(hero.facing,1);
+    ctx.fillStyle='#0b22265c';ctx.beginPath();ctx.ellipse(0,10,40,12,0,0,7);ctx.fill();
+    ctx.fillStyle='#304e56';ctx.fillRect(-23,-30+step,16,34-step);ctx.fillRect(6,-30-step,16,34+step);
+    ctx.fillStyle='#402e2e';ctx.beginPath();ctx.ellipse(-17,6,16,7,-.1,0,7);ctx.ellipse(16,6,16,7,.1,0,7);ctx.fill();
+    // Silk scarf / cape catches the wind
+    ctx.fillStyle='#edd5ab';ctx.beginPath();ctx.moveTo(-19,-87);ctx.quadraticCurveTo(-54,-75,-46+Math.sin(t/330)*5,-24);ctx.quadraticCurveTo(-30,-14,-19,-41);ctx.closePath();ctx.fill();
+    let coat=ctx.createLinearGradient(-31,-95,39,-20);coat.addColorStop(0,'#97bac5');coat.addColorStop(.43,'#3c788d');coat.addColorStop(1,'#284b60');ctx.fillStyle=coat;
+    ctx.beginPath();ctx.moveTo(-21,-89);ctx.lineTo(24,-90);ctx.lineTo(40,-19);ctx.quadraticCurveTo(-2,-7,-40,-19);ctx.closePath();ctx.fill();
+    ctx.strokeStyle='#f8deaf';ctx.lineWidth=3;ctx.stroke();
+    ctx.fillStyle='#3a7184';ctx.beginPath();ctx.moveTo(-19,-88);ctx.lineTo(-35,-82);ctx.lineTo(-48,-42);ctx.lineTo(-33,-37);ctx.lineTo(-16,-69);ctx.fill();ctx.beginPath();ctx.moveTo(20,-88);ctx.lineTo(36,-81);ctx.lineTo(45,-39);ctx.lineTo(31,-34);ctx.lineTo(17,-72);ctx.fill();
+    ctx.fillStyle='#efc89d';ctx.beginPath();ctx.arc(-40,-42,8,0,7);ctx.arc(39,-40,8,0,7);ctx.fill();
+    ctx.strokeStyle='#e1c288';ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(-23,-49);ctx.lineTo(22,-53);ctx.stroke();
+    ctx.fillStyle='#f1d28e';ctx.beginPath();ctx.arc(0,-51,10,0,7);ctx.fill();ctx.strokeStyle='#b58d52';ctx.lineWidth=1.5;ctx.stroke();
+    ctx.fillStyle='#e9c79e';ctx.beginPath();ctx.ellipse(0,-109,29,30,0,0,7);ctx.fill();
+    // Hair with distinctive traveler's bun
+    ctx.fillStyle='#25323f';ctx.beginPath();ctx.ellipse(1,-134,22,15,0,0,7);ctx.fill();ctx.beginPath();ctx.moveTo(-29,-114);ctx.quadraticCurveTo(-34,-144,-10,-142);ctx.quadraticCurveTo(19,-145,30,-122);ctx.lineTo(22,-118);ctx.lineTo(10,-127);ctx.lineTo(-1,-120);ctx.lineTo(-16,-124);ctx.lineTo(-26,-114);ctx.fill();
+    ctx.fillStyle='#ffe1ac';ctx.beginPath();ctx.arc(0,-143,5,0,7);ctx.fill();
+    ctx.fillStyle='#2f3337';ctx.beginPath();ctx.arc(-10,-106,3,0,7);ctx.arc(10,-106,3,0,7);ctx.fill();
+    ctx.fillStyle='#ffffff';ctx.beginPath();ctx.arc(-9,-108,1,0,7);ctx.arc(11,-108,1,0,7);ctx.fill();
+    ctx.strokeStyle='#b87669';ctx.lineWidth=1.7;ctx.beginPath();ctx.arc(0,-97,6,.15,Math.PI-.15);ctx.stroke();
+    ctx.restore();
+  }
   function background(t){const W=sceneWidth,H=sceneHeight,th=themes[island],im=pics[island];ctx.fillStyle=th.sky;ctx.fillRect(0,0,W,H);if(im.complete&&im.naturalWidth){ctx.save();ctx.globalAlpha=.72;ctx.filter='blur(2px)';const ratio=Math.max(W/im.naturalWidth,H*.83/im.naturalHeight),dw=im.naturalWidth*ratio,dh=im.naturalHeight*ratio;ctx.drawImage(im,-(dw-W)/2+(cam*.04%50),-(dh-H*.83)/2-30,dw,dh);ctx.filter='none';ctx.restore()}
     let sh=ctx.createLinearGradient(0,0,0,H);sh.addColorStop(0,'#0c25302c');sh.addColorStop(.6,'#173944a0');sh.addColorStop(1,'#12242de8');ctx.fillStyle=sh;ctx.fillRect(0,0,W,H);
     const floor=H*.78;ctx.fillStyle='#446e77b2';ctx.beginPath();ctx.moveTo(0,floor-60);for(let x=0;x<=W+30;x+=30){const y=floor-120+Math.sin((x+cam*.17)*.005)*19+Math.cos((x+cam*.2)*.012)*7;ctx.lineTo(x,y)}ctx.lineTo(W,H);ctx.lineTo(0,H);ctx.fill();ctx.fillStyle=th.ground;ctx.fillRect(0,floor-1,W,H-floor);ctx.fillStyle='#d5bf92';ctx.fillRect(0,floor,W,19);ctx.fillStyle='#a99170';ctx.fillRect(0,floor+18,W,12);ctx.fillStyle='#284744';ctx.fillRect(0,floor+30,W,H-floor);for(let x=(-cam%100)-100;x<W+100;x+=100){ctx.fillStyle='#a9aa84';ctx.beginPath();ctx.ellipse(x,floor+10,43,5,0,0,7);ctx.fill()}
@@ -69,6 +133,7 @@
   function draw(t){if(state!=='stage')return;const W=sceneWidth,H=sceneHeight,floor=H*.78;ctx.clearRect(0,0,W,H);background(t);
     const left=cam-220,right=cam+W+220;
     for(let j=Math.floor(left/260);j<Math.ceil(right/260);j++){let x=j*260+145-cam;if(j%3===1)drawTree(x,floor,1+j);else if(j%3===0)drawLamp(x,floor,t);if(j%4===1){ctx.save();ctx.translate(x+68,floor);ctx.fillStyle='#eab6ba';for(let q=0;q<6;q++){const fx=Math.sin(j*15+q*8)*27,fy=Math.cos(j*6+q*5)*20;ctx.beginPath();ctx.arc(fx,fy,3+(q%3),0,7);ctx.fill()}ctx.restore()}}
+    for(let k=1;k<=C[island].length;k+=3){const bx=stationX(k)-160-cam;if(bx>-210&&bx<W+210)drawBuilding(bx,floor-3,themes[island].roof,.61)}
     for(let j=0;j<C[island].length;j++){const x=stationX(j)-cam;if(x<left-cam||x>right-cam)continue;drawNPC(x,floor,j,t)}
     const bx=bossX()-cam;if(bx>-180&&bx<W+180){drawBuilding(bx,floor,themes[island].roof,.88);ctx.save();ctx.translate(bx,floor-170);ctx.shadowColor='#f2ca81';ctx.shadowBlur=35;ctx.fillStyle=record(island)===C[island].length?'#f8db9b':'#8b98a2';ctx.font='64px serif';ctx.textAlign='center';ctx.fillText(record(island)===C[island].length?'✦':'🔒',0,-7);ctx.restore();ctx.font='bold 21px sans-serif';ctx.textAlign='center';ctx.fillStyle='#fff0ce';ctx.fillText('終章 · 光門',bx,floor+63)}
     for(const c of collectibles){if(c.taken)continue;let x=c.x-cam;if(x<-20||x>W+20)continue;let y=floor-180+Math.sin(t*.002+c.x)*13;ctx.save();ctx.shadowBlur=23;ctx.shadowColor='#ffeebb';ctx.fillStyle='#fff2a7';ctx.font='29px serif';ctx.textAlign='center';ctx.fillText('✧',x,y);ctx.restore()}
