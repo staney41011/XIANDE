@@ -15,6 +15,7 @@
 @media(max-width:600px){.app-shell{padding:0 12px}.screen{padding-top:21px}.brand-icon{width:35px;height:35px;font-size:20px}.brand strong{font-size:16px}.brand small{font-size:8px;letter-spacing:.8px}.autosave{font-size:10px}.top-right{gap:5px}.nav-btn{padding:9px 4px;font-size:12px}.hero-panel{padding:25px 20px;border-radius:16px}.kicker{font-size:10px;letter-spacing:2px}.hero-info h1{font-size:28px}.hero-info h1 span{font-size:18px}.hero-info p{font-size:13px;line-height:1.9}.primary-btn,.outline-btn,.danger-btn{font-size:12px;padding:10px 13px}.journey-stats{gap:8px;margin:14px 0 30px}.stat-card{padding:12px 9px;gap:9px}.stat-icon{width:37px;height:37px;flex:none;font-size:18px}.stat-card .value{font-size:20px}.stat-card .label{font-size:10px}.section-heading{align-items:start;flex-direction:column;gap:6px}.section-heading h2{font-size:23px}.island-grid{gap:9px}.island-card{border-radius:13px}.island-thumb{height:130px}.island-badge{top:8px;left:8px;padding:4px 7px;font-size:9px}.island-body{padding:12px 11px}.island-body h3{font-size:17px}.island-body p{font-size:10px;height:44px}.island-foot{font-size:9px}.home-footer{margin:25px 0;flex-direction:column;gap:5px}.site-footer{flex-direction:column}.play-screen{padding-top:16px}.play-location{gap:8px}.play-location h2{font-size:21px}.back-btn{font-size:11px;padding:8px}.chapter-dot{font-size:17px}.game-field{border-radius:14px}.game-field canvas{aspect-ratio:1200 / 690}.glass-pill{font-size:9px;padding:5px 8px}.field-top-left{top:8px;left:8px}.field-top-right{top:8px;right:8px}.field-bottom-left{display:none}.mobile-pad{display:block;position:absolute;left:9px;bottom:9px;z-index:4;user-select:none;touch-action:none}.mobile-pad>button{margin-left:38px}.mobile-pad button{width:37px;height:35px;border-radius:9px;border:1px solid #ffffff65;background:#0b1b30aa;color:#fff;font-size:11px;touch-action:none}.pad-row{display:flex;gap:2px}.field-toolbar{flex-direction:column;align-items:flex-start}.field-toolbar>div{width:100%;justify-content:space-between}.quest-list{grid-template-columns:1fr 1fr}.quest-row{padding:8px 2px;gap:5px}.q-index{width:27px;height:27px}.q-name b{font-size:11px}.q-name small{font-size:9px}.q-arrow{display:none}.page-title h1{font-size:30px}.journal-tab{font-size:11px;padding:8px 12px}.card-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.wisdom-card{min-height:190px;padding:13px}.wisdom-card h3{font-size:13px}.wisdom-card p{font-size:11px}.guide-grid{grid-template-columns:1fr}.guide-grid article,.settings-box,.sources{padding:18px}.modal-overlay{padding:9px}.modal-card{padding:19px;border-radius:16px;max-height:94vh}.modal-title{font-size:21px}.modal-art{height:100px}.npc-line,.choice-btn{font-size:12px}.modal-caption{font-size:10px}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{animation-duration:.01ms!important;transition-duration:.01ms!important}}
 </style>
+<link rel="stylesheet" href="experience-v2.css?v=2.0.0">
 </head>
 <body>
   <div class="app-shell">
@@ -162,6 +163,7 @@ function sanitizeSave(s){let next=defaultSave();if(!s||typeof s!=='object')retur
 }
 let progress;try{progress=EMBEDDED?defaultSave():sanitizeSave(JSON.parse(localStorage.getItem(SAVE_KEY)||'null'))}catch(e){progress=defaultSave()}
 function save(){
+ window.dispatchEvent(new Event('dao:progress'));
  if(EMBEDDED){
   if(!hostSaveReady){$('#saveNotice').textContent='○ 正在讀取 APP 存檔';return}
   window.parent.postMessage({source:'dao-rpg',type:'save',progress:progress},'*');
@@ -174,6 +176,7 @@ if(EMBEDDED){
   if(event.source!==window.parent||!event.data||event.data.source!=='xiande')return;
   if(event.data.type==='load'){
    progress=sanitizeSave(event.data.progress);hostSaveReady=true;renderHome();renderGuide();
+   window.dispatchEvent(new Event('dao:progress'));
    if(view==='play')renderQuestUI();
    $('#saveNotice').textContent='● APP 存檔已讀取';
   }else if(event.data.type==='save-ack'){
@@ -273,8 +276,25 @@ function draw(time){if(view!=='play')return;ctx.clearRect(0,0,world.w,world.h);
  drawPlayer(time);
 }
 function tick(now){const dt=Math.min(.045,((now-lastTime)||16)/1000);lastTime=now;move(dt);draw(now);if(bossStage===0&&!$('#modalOverlay').hidden){bossAngle=(now/11)%360;const needle=$('#focusNeedle');if(needle)needle.style.transform=`rotate(${bossAngle}deg)`}requestAnimationFrame(tick)}
+
+window.DaoCore = {
+ getState:()=>progress,
+ answer:(id,index,choice)=>{
+  if(!CHAPTERS[id]||!CHAPTERS[id][index]||choice<0||choice>2)return {ok:false};
+  if(choice!==1){progress.hp=Math.max(20,progress.hp-6);save();return {ok:false};}
+  const key=id+':'+index;
+  if(!progress.cards[key]){progress.cards[key]=true;progress.xp+=18;progress.hp=Math.min(100,progress.hp+7);progress.focus=Math.min(99,progress.focus+1)}
+  progress.lastIsland=id;save();return {ok:true};
+ },
+ finish:(id,pledge)=>{
+  if(!CHAPTERS[id]||completed(id)!==CHAPTERS[id].length||String(pledge||'').trim().length<4)return false;
+  if(!progress.bosses[id]){progress.bosses[id]=true;progress.xp+=45;progress.hp=Math.min(100,progress.hp+20)}
+  progress.pledges[id]=String(pledge).trim().slice(0,220);progress.lastIsland=id;save();return true;
+ }
+};
 renderHome();renderGuide();$('#soundBtn').classList.add('off');save();if(EMBEDDED)window.parent.postMessage({source:'dao-rpg',type:'ready'},'*');requestAnimationFrame(tick);
 })();
 </script>
+<script src="experience-v2.js?v=2.0.0"></script>
 </body>
 </html>
