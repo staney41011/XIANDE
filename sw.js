@@ -1,11 +1,12 @@
 // sw.js
-var CACHE_NAME = 'xd-app-v6';
+var CACHE_NAME = 'xd-app-v7-dao-admin';
 var urlsToCache = [
   './',
   'index.html',
   'styles.css',
   'classics-reader.js',
   'app.js',
+  'dao-rpg-launcher.js',
   'manifest.json',
   'https://cdnjs.cloudflare.com/ajax/libs/pinyin-pro/3.28.1/index.min.js'
 ];
