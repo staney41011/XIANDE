@@ -150,7 +150,8 @@ const $ = (sel,root=document)=>root.querySelector(sel);
 const $$ = (sel,root=document)=>[...root.querySelectorAll(sel)];
 const assetUrl = id => (window.DAO_ASSETS && window.DAO_ASSETS[id]) || `assets/${id}.webp`;
 const esc = value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const SAVE_KEY='chongzheng.dao-rpg.v1';
+const daoProfile=new URLSearchParams(location.search).get('profile')||'';
+const SAVE_KEY=/^[a-f0-9]{64}$/.test(daoProfile)?'chongzheng.dao-rpg.v1.'+daoProfile:'chongzheng.dao-rpg.v1';
 const defaultSave=()=>({version:1,cards:{},bosses:{},xp:0,hp:100,focus:1,pledges:{},lastIsland:'morning',created:Date.now()});
 function sanitizeSave(s){let next=defaultSave();if(!s||typeof s!=='object')return next;
  for(const island of ISLANDS){const arr=CHAPTERS[island.id];for(let i=0;i<arr.length;i++){const key=`${island.id}:${i}`;if(s.cards&&s.cards[key]===true)next.cards[key]=true;}if(s.bosses&&s.bosses[island.id]===true)next.bosses[island.id]=true;if(s.pledges&&typeof s.pledges[island.id]==='string')next.pledges[island.id]=s.pledges[island.id].slice(0,220)}
